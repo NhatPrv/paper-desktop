@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { initWorkerW, fetchSystemMetrics, WorkerWStatus, SystemMetrics } from '@/services/tauri'
 import {
   Monitor,
   Image,
@@ -608,6 +609,20 @@ export default function App() {
   const [activeDesktop, setActiveDesktop] = useState(1)
   const [searchQuery, setSearchQuery] = useState('')
   const [activeFilter, setActiveFilter] = useState('All')
+  const [workerWStatus, setWorkerWStatus] = useState<WorkerWStatus | null>(null)
+  const [systemMetrics, setSystemMetrics] = useState<SystemMetrics>({
+    cpu_usage_percent: 2.4,
+    ram_usage_mb: 38,
+    fullscreen_detected: false,
+  })
+
+  useEffect(() => {
+    initWorkerW().then(status => {
+      setWorkerWStatus(status)
+      console.log('WorkerW Engine Status:', status)
+    })
+    fetchSystemMetrics().then(m => setSystemMetrics(m))
+  }, [])
 
   const filteredWallpapers = WALLPAPERS.filter(w => {
     const matchQuery = w.title.toLowerCase().includes(searchQuery.toLowerCase())
