@@ -10,6 +10,7 @@ import {
   toAssetUrl,
   readFileBase64,
   setRealOsWallpaper,
+  setMonitorWallpaper,
   WorkerWStatus,
   SystemMetrics,
   RealVirtualDesktop,
@@ -746,6 +747,26 @@ export default function App() {
     }
   }
 
+  const handleSelectMonitorWallpaperFile = async (monitorIndex: number) => {
+    const filePath = await selectLocalWallpaperFile()
+    if (filePath) {
+      const res = await setMonitorWallpaper(monitorIndex, filePath)
+      console.log(`Set Monitor ${monitorIndex + 1} Wallpaper Result:`, res)
+
+      const isImg = !filePath.endsWith('.mp4') && !filePath.endsWith('.webm')
+      const previewUrl = isImg ? await readFileBase64(filePath) : ''
+      const fileName = filePath.split(/[\\/]/).pop() || filePath
+
+      setMonitors(prev =>
+        prev.map((m, idx) =>
+          idx === monitorIndex
+            ? ({ ...m, wallpaper: fileName, wallpaper_path: filePath, preview_url: previewUrl } as any)
+            : m
+        )
+      )
+    }
+  }
+
   const filteredWallpapers = WALLPAPERS.filter(w => {
     const matchQuery = w.title.toLowerCase().includes(searchQuery.toLowerCase())
     const matchFilter = activeFilter === 'All' || w.tags.includes(activeFilter)
@@ -1059,45 +1080,170 @@ export default function App() {
         </header>
 
         {/* Scrollable body */}
-        <div
-          style={{
-            flex: 1,
-            overflowY: 'auto',
-            padding: '24px 28px',
-          }}
-        >
-          {/* ── Active Desktops ── */}
-          <section style={{ marginBottom: 32 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
-              <Monitor size={15} color="#60a5fa" />
-              <h2 style={{ fontSize: 14, fontWeight: 700, color: 'rgba(255,255,255,0.75)', margin: 0, letterSpacing: '0.01em' }}>
-                Active Virtual Desktops
-              </h2>
-              <span
-                style={{
-                  fontSize: 10.5,
-                  fontWeight: 600,
-                  padding: '2px 7px',
-                  borderRadius: 4,
-                  background: 'rgba(0,120,212,0.18)',
-                  color: '#60a5fa',
-                  marginLeft: 4,
-                }}
-              >
-                {DESKTOPS.length}
-              </span>
-            </div>
-
-            {/* Horizontal scroll carousel */}
-            <div
+      <div
+        style={{
+          flex: 1,
+          overflowY: 'auto',
+          padding: '24px 28px',
+        }}
+      >
+        {/* ── Connected Physical Displays ── */}
+        <section style={{ marginBottom: 28 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+            <Monitor size={15} color="#38bdf8" />
+            <h2 style={{ fontSize: 14, fontWeight: 700, color: 'rgba(255,255,255,0.85)', margin: 0, letterSpacing: '0.01em' }}>
+              Connected Physical Displays
+            </h2>
+            <span
               style={{
-                display: 'flex',
-                gap: 14,
-                overflowX: 'auto',
-                paddingBottom: 8,
-                cursor: 'grab',
+                fontSize: 10.5,
+                fontWeight: 600,
+                padding: '2px 7px',
+                borderRadius: 4,
+                background: 'rgba(56,189,248,0.15)',
+                color: '#38bdf8',
+                marginLeft: 4,
               }}
             >
+              {monitors.length} Displays Connected
+            </span>
+          </div>
+
+          {/* Cards container */}
+          <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
+            {monitors.map((m, idx) => (
+              <div
+                key={m.device_name || idx}
+                className="desktop-card"
+                style={{
+                  width: 220,
+                  borderRadius: 12,
+                  overflow: 'hidden',
+                  background: 'rgba(0,0,0,0.35)',
+                  border: '1px solid rgba(255,255,255,0.08)',
+                }}
+              >
+                <div style={{ position: 'relative', aspectRatio: '16/9', background: '#111' }}>
+                  {(m as any).preview_url ? (
+                    <img
+                      src={(m as any).preview_url}
+                      alt={m.device_name}
+                      style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                    />
+                  ) : (
+                    <div
+                      style={{
+                        width: '100%',
+                        height: '100%',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        background: 'linear-gradient(135deg, rgba(30,41,59,0.8), rgba(15,23,42,0.9))',
+                        color: 'rgba(255,255,255,0.5)',
+                        fontSize: 12,
+                        gap: 4,
+                      }}
+                    >
+                      <Monitor size={24} color="#64748b" />
+                      <span>{m.resolution_str}</span>
+                    </div>
+                  )}
+                  {m.is_primary && (
+                    <div
+                      style={{
+                        position: 'absolute',
+                        top: 6,
+                        left: 6,
+                        background: 'rgba(56,189,248,0.85)',
+                        borderRadius: 4,
+                        padding: '2px 6px',
+                        fontSize: 10,
+                        fontWeight: 600,
+                        color: '#000',
+                      }}
+                    >
+                      PRIMARY
+                    </div>
+                  )}
+                  <div
+                    style={{
+                      position: 'absolute',
+                      bottom: 6,
+                      right: 6,
+                      background: 'rgba(0,0,0,0.65)',
+                      borderRadius: 4,
+                      padding: '2px 6px',
+                      fontSize: 10,
+                      fontWeight: 500,
+                      color: 'rgba(255,255,255,0.8)',
+                    }}
+                  >
+                    {m.resolution_str}
+                  </div>
+                </div>
+                <div style={{ padding: '10px 12px' }}>
+                  <div style={{ fontWeight: 600, fontSize: 13, color: 'rgba(255,255,255,0.9)', marginBottom: 2 }}>
+                    Display {idx + 1} {m.is_primary ? '(Main Monitor)' : '(Secondary Monitor)'}
+                  </div>
+                  <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', marginBottom: 8, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {(m as any).wallpaper || m.device_name}
+                  </div>
+                  <button
+                    onClick={() => handleSelectMonitorWallpaperFile(idx)}
+                    style={{
+                      width: '100%',
+                      fontSize: 11.5,
+                      fontWeight: 600,
+                      padding: '6px 0',
+                      borderRadius: 6,
+                      border: '1px solid rgba(56,189,248,0.3)',
+                      background: 'rgba(56,189,248,0.1)',
+                      color: '#38bdf8',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease',
+                    }}
+                  >
+                    Set Wallpaper Display {idx + 1}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* ── Active Desktops ── */}
+        <section style={{ marginBottom: 32 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+            <Monitor size={15} color="#60a5fa" />
+            <h2 style={{ fontSize: 14, fontWeight: 700, color: 'rgba(255,255,255,0.75)', margin: 0, letterSpacing: '0.01em' }}>
+              Active Virtual Desktops
+            </h2>
+            <span
+              style={{
+                fontSize: 10.5,
+                fontWeight: 600,
+                padding: '2px 7px',
+                borderRadius: 4,
+                background: 'rgba(0,120,212,0.18)',
+                color: '#60a5fa',
+                marginLeft: 4,
+              }}
+            >
+              {desktopsList.length}
+            </span>
+          </div>
+
+          {/* Horizontal scroll carousel */}
+          <div
+            style={{
+              display: 'flex',
+              gap: 14,
+              overflowX: 'auto',
+              paddingBottom: 8,
+              cursor: 'grab',
+            }}
+          >
               {desktopsList.map(d => (
                 <div
                   key={d.id}

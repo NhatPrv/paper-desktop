@@ -6,6 +6,8 @@ use serde::Serialize;
 use windows::{
     core::PCWSTR,
     Win32::Foundation::{BOOL, HWND, LPARAM, WPARAM},
+    Win32::System::Com::{CoCreateInstance, CoInitializeEx, CLSCTX_ALL, COINIT_APARTMENTTHREADED},
+    Win32::UI::Shell::{DesktopWallpaper, IDesktopWallpaper},
     Win32::UI::WindowsAndMessaging::{
         EnumWindows, FindWindowExW, FindWindowW, SendMessageTimeoutW, SetParent,
         SystemParametersInfoW, SMTO_NORMAL, SPIF_SENDCHANGE, SPIF_UPDATEINIFILE,
@@ -111,16 +113,34 @@ pub fn init_workerw() -> Result<WorkerWStatus, String> {
     }
 }
 
-/// Thay đổi hình nền THẬT của hệ điều hành Windows qua Win32 API SystemParametersInfoW
-pub fn set_windows_wallpaper(image_path: &str) -> Result<String, String> {
+/// Đổi hình nền ĐỘC LẬP cho từng màn hình vật lý cụ thể (Monitor 1, Monitor 2...) qua Windows COM API IDesktopWallpaper
+pub fn set_wallpaper_for_monitor(monitor_index: u32, image_path: &str) -> Result<String, String> {
     #[cfg(target_os = "windows")]
     unsafe {
         use std::os::windows::ffi::OsStrExt;
+        let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
+
         let mut path_utf16: Vec<u16> = std::ffi::OsStr::new(image_path)
             .encode_wide()
             .chain(std::iter::once(0))
             .collect();
 
+        // Khởi tạo IDesktopWallpaper COM Interface
+        let desktop_wallpaper: Result<IDesktopWallpaper, _> = CoCreateInstance(&DesktopWallpaper, None, CLSCTX_ALL);
+
+        if let Ok(dw) = desktop_wallpaper {
+            let monitor_count = dw.GetMonitorDevicePathCount().unwrap_or(0);
+            if monitor_count > 0 {
+                let target_idx = if monitor_index < monitor_count { monitor_index } else { 0 };
+                if let Ok(monitor_id) = dw.GetMonitorDevicePathAt(target_idx) {
+                    if dw.SetWallpaper(monitor_id, PCWSTR(path_utf16.as_ptr())).is_ok() {
+                        return Ok(format!("Đã cập nhật hình nền riêng cho Màn hình {} (ID: {:?}) thành: {}", target_idx + 1, monitor_id, image_path));
+                    }
+                }
+            }
+        }
+
+        // Fallback sang SystemParametersInfoW nếu COM API không khả thi
         let res = SystemParametersInfoW(
             SPI_SETDESKWALLPAPER,
             0,
@@ -129,15 +149,15 @@ pub fn set_windows_wallpaper(image_path: &str) -> Result<String, String> {
         );
 
         if res.is_ok() {
-            Ok(format!("Đã thay đổi hình nền thật của Windows thành: {}", image_path))
+            Ok(format!("Đã cài hình nền hệ thống thành: {}", image_path))
         } else {
-            Err(format!("SystemParametersInfoW thất bại khi đổi hình nền: {}", image_path))
+            Err(format!("Thất bại khi cài hình nền: {}", image_path))
         }
     }
 
     #[cfg(not(target_os = "windows"))]
     {
-        Ok(format!("Simulation: Đổi hình nền hệ điều hành thành {}", image_path))
+        Ok(format!("Simulation: Đổi hình nền Màn hình {} thành {}", monitor_index + 1, image_path))
     }
 }
 

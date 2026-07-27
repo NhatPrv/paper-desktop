@@ -66,14 +66,19 @@ export async function initWorkerW(): Promise<WorkerWStatus> {
   }
 }
 
-/** Đổi hình nền THẬT của hệ điều hành Windows qua Win32 API SystemParametersInfoW */
-export async function setRealOsWallpaper(wallpaperPath: string): Promise<string> {
+/** Đổi hình nền ĐỘC LẬP cho từng màn hình vật lý cụ thể (Monitor 1, Monitor 2...) qua Windows COM API IDesktopWallpaper */
+export async function setMonitorWallpaper(monitorIndex: number, wallpaperPath: string): Promise<string> {
   try {
-    return await invoke<string>('set_real_os_wallpaper', { wallpaperPath })
+    return await invoke<string>('set_monitor_wallpaper', { monitorIndex, wallpaperPath })
   } catch (err) {
-    console.error('Lỗi khi cài hình nền Windows thật:', err)
+    console.error('Lỗi khi cài hình nền màn hình:', err)
     return String(err)
   }
+}
+
+/** Đổi hình nền toàn hệ thống */
+export async function setRealOsWallpaper(wallpaperPath: string): Promise<string> {
+  return setMonitorWallpaper(0, wallpaperPath)
 }
 
 /** Đọc danh sách Virtual Desktops thực tế từ Windows Registry */
@@ -96,7 +101,7 @@ export async function fetchConnectedMonitors(): Promise<DisplayMonitorInfo[]> {
   } catch (err) {
     return [
       { id: 1, device_name: '\\\\.\\DISPLAY1', width: 2560, height: 1600, is_primary: true, resolution_str: '2560×1600' },
-      { id: 2, device_name: '\\\\.\\DISPLAY2', width: 1920, height: 1080, is_primary: false, resolution_str: '1920×1080' },
+      { id: 2, device_name: '\\\\.\\DISPLAY2', width: 1280, height: 1024, is_primary: false, resolution_str: '1280×1024' },
     ]
   }
 }
