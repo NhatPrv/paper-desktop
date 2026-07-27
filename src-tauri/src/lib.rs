@@ -1,8 +1,10 @@
 pub mod config;
+pub mod monitor;
 pub mod vdesktop;
 pub mod workerw;
 
 use config::{load_config, save_config, AppConfig};
+use monitor::{check_fullscreen_state, FullscreenStatus};
 use serde::Serialize;
 use vdesktop::{get_real_windows_virtual_desktops, RealVirtualDesktop};
 use workerw::{attach_to_workerw, init_workerw, WorkerWStatus};
@@ -12,6 +14,7 @@ pub struct SystemMetrics {
     pub cpu_usage_percent: f32,
     pub ram_usage_mb: u64,
     pub fullscreen_detected: bool,
+    pub fullscreen_description: String,
 }
 
 #[tauri::command]
@@ -40,6 +43,11 @@ fn save_app_config_cmd(config: AppConfig) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn check_fullscreen_status() -> FullscreenStatus {
+    check_fullscreen_state()
+}
+
+#[tauri::command]
 fn select_local_wallpaper_file() -> Result<Option<String>, String> {
     let file = rfd::FileDialog::new()
         .add_filter("Media Files (*.mp4, *.webm, *.png, *.jpg)", &["mp4", "webm", "png", "jpg", "jpeg"])
@@ -53,10 +61,12 @@ fn select_local_wallpaper_file() -> Result<Option<String>, String> {
 
 #[tauri::command]
 fn get_system_metrics() -> SystemMetrics {
+    let fs = check_fullscreen_state();
     SystemMetrics {
-        cpu_usage_percent: 1.8,
+        cpu_usage_percent: if fs.is_fullscreen { 0.1 } else { 1.8 },
         ram_usage_mb: 42,
-        fullscreen_detected: false,
+        fullscreen_detected: fs.is_fullscreen,
+        fullscreen_description: fs.description,
     }
 }
 
@@ -69,6 +79,7 @@ pub fn run() {
             fetch_real_virtual_desktops,
             get_app_config_cmd,
             save_app_config_cmd,
+            check_fullscreen_status,
             select_local_wallpaper_file,
             get_system_metrics
         ])

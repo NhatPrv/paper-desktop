@@ -632,6 +632,7 @@ export default function App() {
     cpu_usage_percent: 1.8,
     ram_usage_mb: 42,
     fullscreen_detected: false,
+    fullscreen_description: 'Active - Standby',
   })
 
   useEffect(() => {
@@ -812,7 +813,7 @@ export default function App() {
           <div style={{ fontSize: 10, fontWeight: 600, color: 'rgba(255,255,255,0.25)', letterSpacing: '0.07em', textTransform: 'uppercase', marginBottom: 8 }}>
             System Status
           </div>
-          <div style={{ display: 'flex', gap: 8 }}>
+          <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
             <div
               style={{
                 flex: 1,
@@ -826,9 +827,9 @@ export default function App() {
                 <Cpu size={10} color="#60a5fa" />
                 <span style={{ fontSize: 9.5, color: 'rgba(255,255,255,0.4)', fontWeight: 500 }}>CPU</span>
               </div>
-              <div style={{ fontSize: 13, fontWeight: 700, color: '#60a5fa' }}>12%</div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#60a5fa' }}>{systemMetrics.cpu_usage_percent}%</div>
               <div style={{ marginTop: 4, height: 2, borderRadius: 1, background: 'rgba(255,255,255,0.08)' }}>
-                <div style={{ width: '12%', height: '100%', background: '#60a5fa', borderRadius: 1 }} />
+                <div style={{ width: `${Math.min(systemMetrics.cpu_usage_percent * 5, 100)}%`, height: '100%', background: '#60a5fa', borderRadius: 1 }} />
               </div>
             </div>
             <div
@@ -844,11 +845,39 @@ export default function App() {
                 <MemoryStick size={10} color="#a78bfa" />
                 <span style={{ fontSize: 9.5, color: 'rgba(255,255,255,0.4)', fontWeight: 500 }}>RAM</span>
               </div>
-              <div style={{ fontSize: 13, fontWeight: 700, color: '#a78bfa' }}>842<span style={{ fontSize: 9, fontWeight: 500 }}>MB</span></div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#a78bfa' }}>{systemMetrics.ram_usage_mb}<span style={{ fontSize: 9, fontWeight: 500 }}>MB</span></div>
               <div style={{ marginTop: 4, height: 2, borderRadius: 1, background: 'rgba(255,255,255,0.08)' }}>
-                <div style={{ width: '52%', height: '100%', background: '#a78bfa', borderRadius: 1 }} />
+                <div style={{ width: `${Math.min((systemMetrics.ram_usage_mb / 200) * 100, 100)}%`, height: '100%', background: '#a78bfa', borderRadius: 1 }} />
               </div>
             </div>
+          </div>
+          {/* Fullscreen Auto-Pause status badge */}
+          <div
+            style={{
+              padding: '6px 8px',
+              borderRadius: 6,
+              background: systemMetrics.fullscreen_detected
+                ? 'rgba(239,68,68,0.15)'
+                : 'rgba(34,197,94,0.1)',
+              border: `1px solid ${systemMetrics.fullscreen_detected ? 'rgba(239,68,68,0.3)' : 'rgba(34,197,94,0.2)'}`,
+              fontSize: 10,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 5,
+            }}
+          >
+            <span
+              style={{
+                width: 5,
+                height: 5,
+                borderRadius: '50%',
+                background: systemMetrics.fullscreen_detected ? '#ef4444' : '#22c55e',
+                display: 'inline-block',
+              }}
+            />
+            <span style={{ color: systemMetrics.fullscreen_detected ? '#fca5a5' : '#86efac', fontWeight: 500 }}>
+              {systemMetrics.fullscreen_detected ? 'Auto-Pause: Game/Fullscreen' : 'Auto-Pause: Standby (Active)'}
+            </span>
           </div>
         </div>
       </aside>

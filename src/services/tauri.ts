@@ -30,10 +30,17 @@ export interface AppConfig {
   desktops: DesktopSetting[]
 }
 
+export interface FullscreenStatus {
+  is_fullscreen: boolean
+  state_code: number
+  description: string
+}
+
 export interface SystemMetrics {
   cpu_usage_percent: number
   ram_usage_mb: number
   fullscreen_detected: boolean
+  fullscreen_description: string
 }
 
 /** Khởi tạo bóc tách cửa sổ WorkerW bằng Win32 API */
@@ -89,6 +96,19 @@ export async function saveAppConfig(config: AppConfig): Promise<void> {
   }
 }
 
+/** Kiểm tra trực tiếp xem có ứng dụng/game nào đang chạy Fullscreen hay không */
+export async function checkFullscreenStatus(): Promise<FullscreenStatus> {
+  try {
+    return await invoke<FullscreenStatus>('check_fullscreen_status')
+  } catch (err) {
+    return {
+      is_fullscreen: false,
+      state_code: 0,
+      description: 'Web Simulation - Standby',
+    }
+  }
+}
+
 /** Mở Windows File Picker để người dùng chọn file Wallpaper (.mp4, .webm, .png, .jpg) */
 export async function selectLocalWallpaperFile(): Promise<string | null> {
   try {
@@ -108,6 +128,7 @@ export async function fetchSystemMetrics(): Promise<SystemMetrics> {
       cpu_usage_percent: 1.8,
       ram_usage_mb: 42,
       fullscreen_detected: false,
+      fullscreen_description: 'Active - Standby',
     }
   }
 }
