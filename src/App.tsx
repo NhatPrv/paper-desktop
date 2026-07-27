@@ -1,5 +1,16 @@
 import { useState, useEffect } from 'react'
-import { initWorkerW, fetchSystemMetrics, WorkerWStatus, SystemMetrics } from '@/services/tauri'
+import {
+  initWorkerW,
+  fetchSystemMetrics,
+  fetchRealVirtualDesktops,
+  selectLocalWallpaperFile,
+  getAppConfig,
+  saveAppConfig,
+  WorkerWStatus,
+  SystemMetrics,
+  RealVirtualDesktop,
+  AppConfig,
+} from '@/services/tauri'
 import {
   Monitor,
   Image,
@@ -208,9 +219,11 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: () => void 
 function DesktopCard({
   desktop,
   isActive,
+  onChangeWallpaper,
 }: {
   desktop: (typeof DESKTOPS)[0]
   isActive: boolean
+  onChangeWallpaper?: () => void
 }) {
   return (
     <div
@@ -294,6 +307,10 @@ function DesktopCard({
           {desktop.wallpaper}
         </div>
         <button
+          onClick={(e) => {
+            e.stopPropagation()
+            onChangeWallpaper?.()
+          }}
           style={{
             width: '100%',
             fontSize: 11.5,
@@ -610,9 +627,10 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('')
   const [activeFilter, setActiveFilter] = useState('All')
   const [workerWStatus, setWorkerWStatus] = useState<WorkerWStatus | null>(null)
+  const [desktopsList, setDesktopsList] = useState(DESKTOPS)
   const [systemMetrics, setSystemMetrics] = useState<SystemMetrics>({
-    cpu_usage_percent: 2.4,
-    ram_usage_mb: 38,
+    cpu_usage_percent: 1.8,
+    ram_usage_mb: 42,
     fullscreen_detected: false,
   })
 
@@ -622,7 +640,27 @@ export default function App() {
       console.log('WorkerW Engine Status:', status)
     })
     fetchSystemMetrics().then(m => setSystemMetrics(m))
+    fetchRealVirtualDesktops().then(realList => {
+      if (realList && realList.length > 0) {
+        setDesktopsList(realList.map((rd, index) => ({
+          id: rd.id,
+          name: rd.name,
+          wallpaper: 'Aurora Drift',
+          resolution: '2560×1440',
+          active: rd.is_current,
+          img: DESKTOPS[index % DESKTOPS.length].img,
+        })))
+      }
+    })
   }, [])
+
+  const handleSelectWallpaperFile = async (desktopId: number) => {
+    const filePath = await selectLocalWallpaperFile()
+    if (filePath) {
+      const fileName = filePath.split(/[\\/]/).pop() || filePath
+      setDesktopsList(prev => prev.map(d => d.id === desktopId ? { ...d, wallpaper: fileName } : d))
+    }
+  }
 
   const filteredWallpapers = WALLPAPERS.filter(w => {
     const matchQuery = w.title.toLowerCase().includes(searchQuery.toLowerCase())
@@ -948,7 +986,7 @@ export default function App() {
                 cursor: 'grab',
               }}
             >
-              {DESKTOPS.map(d => (
+              {desktopsList.map(d => (
                 <div
                   key={d.id}
                   onClick={() => setActiveDesktop(d.id)}
@@ -964,7 +1002,11 @@ export default function App() {
                     transition: 'all 0.2s ease',
                   }}
                 >
-                  <DesktopCard desktop={d} isActive={activeDesktop === d.id} />
+                  <DesktopCard
+                    desktop={d}
+                    isActive={activeDesktop === d.id}
+                    onChangeWallpaper={() => handleSelectWallpaperFile(d.id)}
+                  />
                 </div>
               ))}
 

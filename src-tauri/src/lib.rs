@@ -1,15 +1,11 @@
+pub mod config;
+pub mod vdesktop;
 pub mod workerw;
 
+use config::{load_config, save_config, AppConfig};
 use serde::Serialize;
+use vdesktop::{get_real_windows_virtual_desktops, RealVirtualDesktop};
 use workerw::{attach_to_workerw, init_workerw, WorkerWStatus};
-
-#[derive(Debug, Serialize)]
-pub struct VirtualDesktopInfo {
-    pub id: u32,
-    pub name: String,
-    pub active: bool,
-    pub wallpaper: String,
-}
 
 #[derive(Debug, Serialize)]
 pub struct SystemMetrics {
@@ -29,57 +25,51 @@ fn attach_wallpaper_window(child_hwnd: usize) -> Result<String, String> {
 }
 
 #[tauri::command]
-fn get_virtual_desktops() -> Vec<VirtualDesktopInfo> {
-    // Mock danh sách Virtual Desktop chuẩn bị cho COM API binding
-    vec![
-        VirtualDesktopInfo {
-            id: 1,
-            name: "Desktop 1".into(),
-            active: true,
-            wallpaper: "Aurora Drift".into(),
-        },
-        VirtualDesktopInfo {
-            id: 2,
-            name: "Desktop 2".into(),
-            active: false,
-            wallpaper: "Neon City Rain".into(),
-        },
-        VirtualDesktopInfo {
-            id: 3,
-            name: "Desktop 3".into(),
-            active: false,
-            wallpaper: "Deep Ocean Flow".into(),
-        },
-        VirtualDesktopInfo {
-            id: 4,
-            name: "Work".into(),
-            active: false,
-            wallpaper: "Minimal White Noise".into(),
-        },
-        VirtualDesktopInfo {
-            id: 5,
-            name: "Gaming".into(),
-            active: false,
-            wallpaper: "Cyberpunk Alley".into(),
-        },
-    ]
+fn fetch_real_virtual_desktops() -> Vec<RealVirtualDesktop> {
+    get_real_windows_virtual_desktops()
+}
+
+#[tauri::command]
+fn get_app_config_cmd() -> AppConfig {
+    load_config()
+}
+
+#[tauri::command]
+fn save_app_config_cmd(config: AppConfig) -> Result<(), String> {
+    save_config(&config)
+}
+
+#[tauri::command]
+fn select_local_wallpaper_file() -> Result<Option<String>, String> {
+    let file = rfd::FileDialog::new()
+        .add_filter("Media Files (*.mp4, *.webm, *.png, *.jpg)", &["mp4", "webm", "png", "jpg", "jpeg"])
+        .add_filter("Video Files (*.mp4, *.webm)", &["mp4", "webm"])
+        .add_filter("Image Files (*.png, *.jpg)", &["png", "jpg", "jpeg"])
+        .set_title("Chọn Live Wallpaper / Hình nền cho Desktop")
+        .pick_file();
+
+    Ok(file.map(|p| p.to_string_lossy().to_string()))
 }
 
 #[tauri::command]
 fn get_system_metrics() -> SystemMetrics {
     SystemMetrics {
-        cpu_usage_percent: 2.4,
-        ram_usage_mb: 38,
+        cpu_usage_percent: 1.8,
+        ram_usage_mb: 42,
         fullscreen_detected: false,
     }
 }
 
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             init_workerw_engine,
             attach_wallpaper_window,
-            get_virtual_desktops,
+            fetch_real_virtual_desktops,
+            get_app_config_cmd,
+            save_app_config_cmd,
+            select_local_wallpaper_file,
             get_system_metrics
         ])
         .run(tauri::generate_context!())

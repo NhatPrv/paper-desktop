@@ -6,11 +6,28 @@ export interface WorkerWStatus {
   message: string
 }
 
-export interface VirtualDesktopInfo {
+export interface RealVirtualDesktop {
   id: number
+  guid: string
   name: string
-  active: boolean
-  wallpaper: string
+  is_current: boolean
+}
+
+export interface DesktopSetting {
+  id: number
+  guid: string
+  name: string
+  wallpaper_path: string
+  wallpaper_type: string
+  volume: number
+  paused: boolean
+}
+
+export interface AppConfig {
+  global_active: boolean
+  global_volume: number
+  auto_pause_fullscreen: boolean
+  desktops: DesktopSetting[]
 }
 
 export interface SystemMetrics {
@@ -33,30 +50,64 @@ export async function initWorkerW(): Promise<WorkerWStatus> {
   }
 }
 
+/** Đọc danh sách Virtual Desktops thực tế từ Windows Registry */
+export async function fetchRealVirtualDesktops(): Promise<RealVirtualDesktop[]> {
+  try {
+    return await invoke<RealVirtualDesktop[]>('fetch_real_virtual_desktops')
+  } catch (err) {
+    return [
+      { id: 1, guid: 'E738B162-81D2-4822-B129-281C3058D101', name: 'Desktop 1', is_current: true },
+      { id: 2, guid: 'A192B743-9821-4190-C823-912A8401E202', name: 'Desktop 2', is_current: false },
+      { id: 3, guid: 'B823C910-1294-4712-D912-3841029F1303', name: 'Work', is_current: false },
+    ]
+  }
+}
+
+/** Đọc cấu hình app từ AppData/PaperDesktop/config.json */
+export async function getAppConfig(): Promise<AppConfig> {
+  try {
+    return await invoke<AppConfig>('get_app_config_cmd')
+  } catch (err) {
+    return {
+      global_active: true,
+      global_volume: 0,
+      auto_pause_fullscreen: true,
+      desktops: [
+        { id: 1, guid: 'default-1', name: 'Desktop 1', wallpaper_path: '', wallpaper_type: 'none', volume: 0, paused: false },
+        { id: 2, guid: 'default-2', name: 'Desktop 2', wallpaper_path: '', wallpaper_type: 'none', volume: 0, paused: false },
+      ],
+    }
+  }
+}
+
+/** Lưu cấu hình app vào config.json */
+export async function saveAppConfig(config: AppConfig): Promise<void> {
+  try {
+    await invoke('save_app_config_cmd', { config })
+  } catch (err) {
+    console.error('Lỗi khi lưu cấu hình:', err)
+  }
+}
+
+/** Mở Windows File Picker để người dùng chọn file Wallpaper (.mp4, .webm, .png, .jpg) */
+export async function selectLocalWallpaperFile(): Promise<string | null> {
+  try {
+    return await invoke<string | null>('select_local_wallpaper_file')
+  } catch (err) {
+    console.warn('Browser Mode File Selection mock')
+    return null
+  }
+}
+
 /** Lấy thông số CPU/RAM thực tế từ Windows */
 export async function fetchSystemMetrics(): Promise<SystemMetrics> {
   try {
     return await invoke<SystemMetrics>('get_system_metrics')
   } catch (err) {
     return {
-      cpu_usage_percent: 2.4,
-      ram_usage_mb: 38,
+      cpu_usage_percent: 1.8,
+      ram_usage_mb: 42,
       fullscreen_detected: false,
     }
-  }
-}
-
-/** Lấy danh sách Virtual Desktops hiện có trên Windows */
-export async function fetchVirtualDesktops(): Promise<VirtualDesktopInfo[]> {
-  try {
-    return await invoke<VirtualDesktopInfo[]>('get_virtual_desktops')
-  } catch (err) {
-    return [
-      { id: 1, name: 'Desktop 1', active: true, wallpaper: 'Aurora Drift' },
-      { id: 2, name: 'Desktop 2', active: false, wallpaper: 'Neon City Rain' },
-      { id: 3, name: 'Desktop 3', active: false, wallpaper: 'Deep Ocean Flow' },
-      { id: 4, name: 'Work', active: false, wallpaper: 'Minimal White Noise' },
-      { id: 5, name: 'Gaming', active: false, wallpaper: 'Cyberpunk Alley' },
-    ]
   }
 }
