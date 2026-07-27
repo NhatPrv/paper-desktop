@@ -675,45 +675,30 @@ export default function App() {
     })
     fetchSystemMetrics().then(m => setSystemMetrics(m))
 
-    // Tự động phát hiện màn hình thực tế và load cấu hình
-    Promise.all([fetchRealVirtualDesktops(), fetchConnectedMonitors(), getAppConfig()]).then(
-      async ([realList, monList, appCfg]) => {
-        if (monList && monList.length > 0) {
-          setMonitors(monList)
-        }
+    // Tự động phát hiện màn hình thực tế và đọc hình nền hiện tại của máy
+    fetchConnectedMonitors().then(async monList => {
+      if (monList && monList.length > 0) {
+        const monWithWallpapers = await Promise.all(
+          monList.map(async (m, idx) => {
+            let pUrl = ''
+            if (m.current_wallpaper_path && !m.current_wallpaper_path.endsWith('.mp4') && !m.current_wallpaper_path.endsWith('.webm')) {
+              pUrl = await readFileBase64(m.current_wallpaper_path)
+            }
+            const wallpaperName = m.current_wallpaper_path
+              ? m.current_wallpaper_path.split(/[\\/]/).pop() || m.current_wallpaper_path
+              : `System Wallpaper ${idx + 1}`
 
-        const primaryRes = monList && monList.length > 0 ? monList[0].resolution_str : '1920×1080'
-
-        if (realList && realList.length > 0) {
-          const listWithBase64 = await Promise.all(
-            realList.map(async (rd, index) => {
-              const savedSetting = appCfg?.desktops?.find(d => d.id === rd.id || d.guid === rd.guid)
-              const wallpaperName = savedSetting?.wallpaper_path
-                ? savedSetting.wallpaper_path.split(/[\\/]/).pop() || savedSetting.wallpaper_path
-                : DESKTOPS[index % DESKTOPS.length].wallpaper
-
-              let previewUrl = ''
-              if (savedSetting?.wallpaper_path && !savedSetting.wallpaper_path.endsWith('.mp4') && !savedSetting.wallpaper_path.endsWith('.webm')) {
-                previewUrl = await readFileBase64(savedSetting.wallpaper_path)
-              }
-
-              return {
-                id: rd.id,
-                guid: rd.guid,
-                name: rd.name,
-                wallpaper: wallpaperName,
-                wallpaper_path: savedSetting?.wallpaper_path || '',
-                preview_url: previewUrl,
-                resolution: primaryRes,
-                active: rd.is_current,
-                img: DESKTOPS[index % DESKTOPS.length].img,
-              }
-            })
-          )
-          setDesktopsList(listWithBase64)
-        }
+            return {
+              ...m,
+              wallpaper: wallpaperName,
+              wallpaper_path: m.current_wallpaper_path,
+              preview_url: pUrl,
+            }
+          })
+        )
+        setMonitors(monWithWallpapers)
       }
-    )
+    })
   }, [])
 
   const handleSelectWallpaperFile = async (desktopId: number) => {
@@ -1012,10 +997,10 @@ export default function App() {
         >
           <div>
             <h1 style={{ fontSize: 20, fontWeight: 700, color: 'rgba(255,255,255,0.92)', margin: 0, lineHeight: 1.2 }}>
-              Virtual Desktops Manager
+              Multi-Display Desktop Manager
             </h1>
             <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.35)', margin: '3px 0 0' }}>
-              {desktopsList.length} Virtual Desktops · {monitors.length > 0 ? `Display: ${monitors.map(m => `${m.resolution_str}${m.is_primary ? ' (Primary)' : ''}`).join(', ')}` : 'Detecting hardware...'}
+              {monitors.length > 0 ? `${monitors.length} Physical Displays Connected · ${monitors.map(m => `${m.resolution_str}${m.is_primary ? ' (Primary)' : ''}`).join(', ')}` : 'Detecting displays...'}
             </p>
           </div>
 
@@ -1212,108 +1197,7 @@ export default function App() {
           </div>
         </section>
 
-        {/* ── Active Desktops ── */}
-        <section style={{ marginBottom: 32 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
-            <Monitor size={15} color="#60a5fa" />
-            <h2 style={{ fontSize: 14, fontWeight: 700, color: 'rgba(255,255,255,0.75)', margin: 0, letterSpacing: '0.01em' }}>
-              Active Virtual Desktops
-            </h2>
-            <span
-              style={{
-                fontSize: 10.5,
-                fontWeight: 600,
-                padding: '2px 7px',
-                borderRadius: 4,
-                background: 'rgba(0,120,212,0.18)',
-                color: '#60a5fa',
-                marginLeft: 4,
-              }}
-            >
-              {desktopsList.length}
-            </span>
-          </div>
 
-          {/* Horizontal scroll carousel */}
-          <div
-            style={{
-              display: 'flex',
-              gap: 14,
-              overflowX: 'auto',
-              paddingBottom: 8,
-              cursor: 'grab',
-            }}
-          >
-              {desktopsList.map(d => (
-                <div
-                  key={d.id}
-                  onClick={() => setActiveDesktop(d.id)}
-                  style={{
-                    flexShrink: 0,
-                    borderRadius: 12,
-                    overflow: 'hidden',
-                    border: `1px solid ${activeDesktop === d.id ? 'rgba(0,120,212,0.6)' : 'rgba(255,255,255,0.07)'}`,
-                    boxShadow: activeDesktop === d.id
-                      ? '0 0 0 1px rgba(0,120,212,0.3), 0 0 20px rgba(0,120,212,0.15)'
-                      : 'none',
-                    cursor: 'pointer',
-                    transition: 'all 0.2s ease',
-                  }}
-                >
-                  <DesktopCard
-                    desktop={d}
-                    isActive={activeDesktop === d.id}
-                    onChangeWallpaper={() => handleSelectWallpaperFile(d.id)}
-                  />
-                </div>
-              ))}
-
-              {/* Add Desktop placeholder */}
-              <div
-                style={{
-                  width: 200,
-                  flexShrink: 0,
-                  borderRadius: 12,
-                  border: '1.5px dashed rgba(255,255,255,0.1)',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: 8,
-                  cursor: 'pointer',
-                  transition: 'all 0.2s ease',
-                  minHeight: 160,
-                }}
-                onMouseEnter={e => {
-                  const el = e.currentTarget
-                  el.style.borderColor = 'rgba(0,120,212,0.35)'
-                  el.style.background = 'rgba(0,120,212,0.05)'
-                }}
-                onMouseLeave={e => {
-                  const el = e.currentTarget
-                  el.style.borderColor = 'rgba(255,255,255,0.1)'
-                  el.style.background = 'transparent'
-                }}
-              >
-                <div
-                  style={{
-                    width: 36,
-                    height: 36,
-                    borderRadius: '50%',
-                    border: '1.5px dashed rgba(255,255,255,0.2)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  <Plus size={16} color="rgba(255,255,255,0.3)" />
-                </div>
-                <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.3)', fontWeight: 500 }}>
-                  New Desktop
-                </span>
-              </div>
-            </div>
-          </section>
 
           {/* ── Wallpaper Library ── */}
           <section>

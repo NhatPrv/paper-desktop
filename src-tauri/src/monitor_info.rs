@@ -10,6 +10,10 @@ use windows::Win32::Graphics::Gdi::{
     DISPLAY_DEVICEW, DISPLAY_DEVICE_ATTACHED_TO_DESKTOP, DISPLAY_DEVICE_PRIMARY_DEVICE,
     ENUM_CURRENT_SETTINGS, HDC, HMONITOR, MONITORINFOEXW, DEVMODEW,
 };
+#[cfg(target_os = "windows")]
+use windows::Win32::System::Com::{CoCreateInstance, CoInitializeEx, CLSCTX_ALL, COINIT_APARTMENTTHREADED};
+#[cfg(target_os = "windows")]
+use windows::Win32::UI::Shell::{DesktopWallpaper, IDesktopWallpaper};
 
 #[derive(Debug, Serialize, Clone)]
 pub struct DisplayMonitorInfo {
@@ -19,6 +23,24 @@ pub struct DisplayMonitorInfo {
     pub height: u32,
     pub is_primary: bool,
     pub resolution_str: String,
+    pub current_wallpaper_path: String,
+}
+
+/// Đọc đường dẫn hình nền Windows thực tế hiện tại của từng màn hình qua COM API IDesktopWallpaper
+pub fn get_current_monitor_wallpaper(monitor_index: u32) -> String {
+    #[cfg(target_os = "windows")]
+    unsafe {
+        let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
+        if let Ok(dw) = CoCreateInstance::<_, IDesktopWallpaper>(&DesktopWallpaper, None, CLSCTX_ALL) {
+            if let Ok(mon_id) = dw.GetMonitorDevicePathAt(monitor_index) {
+                if let Ok(pwstr) = dw.GetWallpaper(mon_id) {
+                    let path = pwstr.to_string().unwrap_or_default();
+                    return path;
+                }
+            }
+        }
+    }
+    String::new()
 }
 
 #[cfg(target_os = "windows")]
@@ -40,15 +62,17 @@ unsafe extern "system" fn enum_monitors_callback(
         let device_name = raw_name.trim_matches('\0').trim().to_string();
 
         let list = &mut *(lparam.0 as *mut Vec<DisplayMonitorInfo>);
-        let id = (list.len() + 1) as u32;
+        let id = list.len() as u32;
+        let wallpaper_path = get_current_monitor_wallpaper(id);
 
         list.push(DisplayMonitorInfo {
-            id,
+            id: id + 1,
             device_name,
             width,
             height,
             is_primary,
             resolution_str: format!("{}×{}", width, height),
+            current_wallpaper_path: wallpaper_path,
         });
     }
     BOOL(1)
@@ -91,6 +115,7 @@ pub fn get_connected_monitors() -> Vec<DisplayMonitorInfo> {
                     let h = dm.dmPelsHeight;
                     let is_primary = (dd.StateFlags & DISPLAY_DEVICE_PRIMARY_DEVICE) != 0;
                     let name = String::from_utf16_lossy(&dd.DeviceName).trim_matches('\0').trim().to_string();
+                    let wallpaper_path = get_current_monitor_wallpaper(device_index);
 
                     monitors.push(DisplayMonitorInfo {
                         id: device_index + 1,
@@ -99,6 +124,7 @@ pub fn get_connected_monitors() -> Vec<DisplayMonitorInfo> {
                         height: h,
                         is_primary,
                         resolution_str: format!("{}×{}", w, h),
+                        current_wallpaper_path: wallpaper_path,
                     });
                 }
             }
@@ -123,14 +149,16 @@ pub fn get_connected_monitors() -> Vec<DisplayMonitorInfo> {
             height: 1600,
             is_primary: true,
             resolution_str: "2560×1600".into(),
+            current_wallpaper_path: "".into(),
         },
         DisplayMonitorInfo {
             id: 2,
             device_name: "\\\\.\\DISPLAY2".into(),
-            width: 1920,
-            height: 1080,
+            width: 1280,
+            height: 1024,
             is_primary: false,
-            resolution_str: "1920×1080".into(),
+            resolution_str: "1280×1024".into(),
+            current_wallpaper_path: "".into(),
         },
     ]
 }

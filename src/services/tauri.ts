@@ -20,6 +20,7 @@ export interface DisplayMonitorInfo {
   height: number
   is_primary: boolean
   resolution_str: string
+  current_wallpaper_path: string
 }
 
 export interface DesktopSetting {
@@ -88,20 +89,18 @@ export async function fetchRealVirtualDesktops(): Promise<RealVirtualDesktop[]> 
   } catch (err) {
     return [
       { id: 1, guid: 'E738B162-81D2-4822-B129-281C3058D101', name: 'Desktop 1', is_current: true },
-      { id: 2, guid: 'A192B743-9821-4190-C823-912A8401E202', name: 'Desktop 2', is_current: false },
-      { id: 3, guid: 'B823C910-1294-4712-D912-3841029F1303', name: 'Work', is_current: false },
     ]
   }
 }
 
-/** Đọc kích thước độ phân giải thực tế của tất cả màn hình kết nối qua Win32 EnumDisplayMonitors */
+/** Đọc kích thước độ phân giải thực tế và hình nền mặc định hiện tại của tất cả màn hình kết nối qua Win32 EnumDisplayMonitors */
 export async function fetchConnectedMonitors(): Promise<DisplayMonitorInfo[]> {
   try {
     return await invoke<DisplayMonitorInfo[]>('fetch_connected_monitors')
   } catch (err) {
     return [
-      { id: 1, device_name: '\\\\.\\DISPLAY1', width: 2560, height: 1600, is_primary: true, resolution_str: '2560×1600' },
-      { id: 2, device_name: '\\\\.\\DISPLAY2', width: 1280, height: 1024, is_primary: false, resolution_str: '1280×1024' },
+      { id: 1, device_name: '\\\\.\\DISPLAY1', width: 2560, height: 1600, is_primary: true, resolution_str: '2560×1600', current_wallpaper_path: '' },
+      { id: 2, device_name: '\\\\.\\DISPLAY2', width: 1280, height: 1024, is_primary: false, resolution_str: '1280×1024', current_wallpaper_path: '' },
     ]
   }
 }
@@ -141,7 +140,6 @@ export async function getAppConfig(): Promise<AppConfig> {
       auto_pause_fullscreen: true,
       desktops: [
         { id: 1, guid: 'default-1', name: 'Desktop 1', wallpaper_path: '', wallpaper_type: 'none', volume: 0, paused: false },
-        { id: 2, guid: 'default-2', name: 'Desktop 2', wallpaper_path: '', wallpaper_type: 'none', volume: 0, paused: false },
       ],
     }
   }

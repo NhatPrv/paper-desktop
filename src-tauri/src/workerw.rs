@@ -115,6 +115,13 @@ pub fn init_workerw() -> Result<WorkerWStatus, String> {
 
 /// Đổi hình nền ĐỘC LẬP cho từng màn hình vật lý cụ thể (Monitor 1, Monitor 2...) qua Windows COM API IDesktopWallpaper
 pub fn set_wallpaper_for_monitor(monitor_index: u32, image_path: &str) -> Result<String, String> {
+    // Nếu tệp là Video (.mp4, .webm), không gọi native OS Image wallpaper engine để tránh làm đen màn hình
+    let is_video = image_path.ends_with(".mp4") || image_path.ends_with(".webm");
+    if is_video {
+        let _ = init_workerw();
+        return Ok(format!("Đã kích hoạt Live Video Wallpaper cho Màn hình {}: {}", monitor_index + 1, image_path));
+    }
+
     #[cfg(target_os = "windows")]
     unsafe {
         use std::os::windows::ffi::OsStrExt;
