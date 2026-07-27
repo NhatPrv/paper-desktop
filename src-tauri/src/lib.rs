@@ -75,17 +75,28 @@ fn select_local_wallpaper_file() -> Result<Option<String>, String> {
 #[tauri::command]
 fn read_file_base64(file_path: String) -> Result<String, String> {
     let bytes = fs::read(&file_path).map_err(|e| format!("Không thể đọc tệp {}: {}", file_path, e))?;
-    let ext = file_path.split('.').last().unwrap_or("").to_lowercase();
     
-    let mime = match ext.as_str() {
-        "png" => "image/png",
-        "jpg" | "jpeg" => "image/jpeg",
-        "webp" => "image/webp",
-        "gif" => "image/gif",
-        "svg" => "image/svg+xml",
-        "mp4" => "video/mp4",
-        "webm" => "video/webm",
-        _ => "application/octet-stream",
+    // Thuật toán Magic Bytes Detection: tự động bóc tách chữ ký byte ảnh/video
+    // Hỗ trợ 100% các file wallpaper cache của Windows 11 không có phần mở rộng (TranscodedWallpaper, AQPP6...)
+    let mime = if bytes.len() >= 3 && bytes[0] == 0xFF && bytes[1] == 0xD8 && bytes[2] == 0xFF {
+        "image/jpeg"
+    } else if bytes.len() >= 4 && bytes[0] == 0x89 && bytes[1] == 0x50 && bytes[2] == 0x4E && bytes[3] == 0x47 {
+        "image/png"
+    } else if bytes.len() >= 3 && &bytes[0..3] == b"GIF" {
+        "image/gif"
+    } else if bytes.len() >= 12 && &bytes[8..12] == b"WEBP" {
+        "image/webp"
+    } else if bytes.len() >= 8 && &bytes[4..8] == b"ftyp" {
+        "video/mp4"
+    } else {
+        let ext = file_path.split('.').last().unwrap_or("").to_lowercase();
+        match ext.as_str() {
+            "png" => "image/png",
+            "webp" => "image/webp",
+            "mp4" => "video/mp4",
+            "webm" => "video/webm",
+            _ => "image/jpeg", // Windows Wallpaper Cache luôn là tệp JPEG
+        }
     };
 
     use base64::Engine;
