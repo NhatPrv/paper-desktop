@@ -10,7 +10,7 @@ use monitor_info::{get_connected_monitors, DisplayMonitorInfo};
 use serde::Serialize;
 use std::fs;
 use vdesktop::{get_real_windows_virtual_desktops, RealVirtualDesktop};
-use workerw::{attach_to_workerw, init_workerw, WorkerWStatus};
+use workerw::{attach_to_workerw, init_workerw, set_windows_wallpaper, WorkerWStatus};
 
 #[derive(Debug, Serialize)]
 pub struct SystemMetrics {
@@ -28,6 +28,11 @@ fn init_workerw_engine() -> Result<WorkerWStatus, String> {
 #[tauri::command]
 fn attach_wallpaper_window(child_hwnd: usize) -> Result<String, String> {
     attach_to_workerw(child_hwnd)
+}
+
+#[tauri::command]
+fn set_real_os_wallpaper(wallpaper_path: String) -> Result<String, String> {
+    set_windows_wallpaper(&wallpaper_path)
 }
 
 #[tauri::command]
@@ -105,6 +110,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             init_workerw_engine,
             attach_wallpaper_window,
+            set_real_os_wallpaper,
             fetch_real_virtual_desktops,
             fetch_connected_monitors,
             get_app_config_cmd,

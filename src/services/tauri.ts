@@ -66,6 +66,16 @@ export async function initWorkerW(): Promise<WorkerWStatus> {
   }
 }
 
+/** Đổi hình nền THẬT của hệ điều hành Windows qua Win32 API SystemParametersInfoW */
+export async function setRealOsWallpaper(wallpaperPath: string): Promise<string> {
+  try {
+    return await invoke<string>('set_real_os_wallpaper', { wallpaperPath })
+  } catch (err) {
+    console.error('Lỗi khi cài hình nền Windows thật:', err)
+    return String(err)
+  }
+}
+
 /** Đọc danh sách Virtual Desktops thực tế từ Windows Registry */
 export async function fetchRealVirtualDesktops(): Promise<RealVirtualDesktop[]> {
   try {

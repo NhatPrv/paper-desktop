@@ -9,6 +9,7 @@ import {
   saveAppConfig,
   toAssetUrl,
   readFileBase64,
+  setRealOsWallpaper,
   WorkerWStatus,
   SystemMetrics,
   RealVirtualDesktop,
@@ -717,6 +718,9 @@ export default function App() {
   const handleSelectWallpaperFile = async (desktopId: number) => {
     const filePath = await selectLocalWallpaperFile()
     if (filePath) {
+      // 1. Đổi ngay hình nền thật của Windows OS qua Win32 SystemParametersInfoW API
+      setRealOsWallpaper(filePath).then(res => console.log('Win32 OS Wallpaper Result:', res))
+
       const fileName = filePath.split(/[\\/]/).pop() || filePath
       const isImg = !filePath.endsWith('.mp4') && !filePath.endsWith('.webm')
       const previewUrl = isImg ? await readFileBase64(filePath) : ''

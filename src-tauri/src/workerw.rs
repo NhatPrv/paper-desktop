@@ -8,7 +8,8 @@ use windows::{
     Win32::Foundation::{BOOL, HWND, LPARAM, WPARAM},
     Win32::UI::WindowsAndMessaging::{
         EnumWindows, FindWindowExW, FindWindowW, SendMessageTimeoutW, SetParent,
-        SMTO_NORMAL,
+        SystemParametersInfoW, SMTO_NORMAL, SPIF_SENDCHANGE, SPIF_UPDATEINIFILE,
+        SPI_SETDESKWALLPAPER,
     },
 };
 
@@ -32,8 +33,6 @@ unsafe extern "system" fn enum_windows_proc(hwnd: HWND, lparam: LPARAM) -> BOOL 
 
     if let Ok(shell_hwnd) = shell_dll {
         if !shell_hwnd.0.is_null() {
-            // Found SHELLDLL_DefView inside hwnd.
-            // The next WorkerW sibling window is where wallpaper can be attached.
             let worker_w = FindWindowExW(
                 HWND::default(),
                 hwnd,
@@ -45,12 +44,12 @@ unsafe extern "system" fn enum_windows_proc(hwnd: HWND, lparam: LPARAM) -> BOOL 
                 if !w_hwnd.0.is_null() {
                     let target_ptr = lparam.0 as *mut HWND;
                     *target_ptr = w_hwnd;
-                    return BOOL(0); // Stop enumeration
+                    return BOOL(0);
                 }
             }
         }
     }
-    BOOL(1) // Continue enumeration
+    BOOL(1)
 }
 
 /// Gửi message 0x052C tới Progman để bắt hệ thống Windows sinh ra cửa sổ WorkerW
@@ -65,7 +64,6 @@ pub fn init_workerw() -> Result<WorkerWStatus, String> {
         }
 
         let mut result: usize = 0;
-        // Gửi Message 0x052C tới Progman với timeout 1000ms
         let _ = SendMessageTimeoutW(
             progman,
             0x052C,
@@ -83,7 +81,6 @@ pub fn init_workerw() -> Result<WorkerWStatus, String> {
         );
 
         if target_workerw.0.is_null() {
-            // Nếu không tìm thấy qua EnumWindows, dùng WorkerW kế tiếp Progman
             if let Ok(worker_w) = FindWindowExW(
                 HWND::default(),
                 progman,
@@ -111,6 +108,36 @@ pub fn init_workerw() -> Result<WorkerWStatus, String> {
             workerw_hwnd: "0x0".into(),
             message: "Hệ điều hành không phải Windows, chế độ Simulation active".into(),
         })
+    }
+}
+
+/// Thay đổi hình nền THẬT của hệ điều hành Windows qua Win32 API SystemParametersInfoW
+pub fn set_windows_wallpaper(image_path: &str) -> Result<String, String> {
+    #[cfg(target_os = "windows")]
+    unsafe {
+        use std::os::windows::ffi::OsStrExt;
+        let mut path_utf16: Vec<u16> = std::ffi::OsStr::new(image_path)
+            .encode_wide()
+            .chain(std::iter::once(0))
+            .collect();
+
+        let res = SystemParametersInfoW(
+            SPI_SETDESKWALLPAPER,
+            0,
+            Some(path_utf16.as_mut_ptr() as *mut _),
+            SPIF_UPDATEINIFILE | SPIF_SENDCHANGE,
+        );
+
+        if res.is_ok() {
+            Ok(format!("Đã thay đổi hình nền thật của Windows thành: {}", image_path))
+        } else {
+            Err(format!("SystemParametersInfoW thất bại khi đổi hình nền: {}", image_path))
+        }
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        Ok(format!("Simulation: Đổi hình nền hệ điều hành thành {}", image_path))
     }
 }
 
