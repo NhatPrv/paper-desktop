@@ -745,9 +745,20 @@ export default function App() {
   const handleSelectMonitorWallpaperFile = async (monitorIndex: number) => {
     const filePath = await selectLocalWallpaperFile()
     if (filePath) {
-      const isVid = isMediaVideo(filePath)
-      const previewUrl = !isVid ? await readFileBase64(filePath) : ''
+      // 1. Gọi Win32 COM API IDesktopWallpaper::SetWallpaper để đổi hình nền Màn hình 1 hoặc Màn hình 2
+      const res = await setMonitorWallpaper(monitorIndex, filePath)
+      console.log(`Set Monitor ${monitorIndex + 1} Wallpaper Result:`, res)
+
+      // 2. Mã hóa Data URL qua Rust (Magic Bytes hỗ trợ cả image và video)
+      let previewUrl = ''
+      try {
+        previewUrl = await readFileBase64(filePath)
+      } catch (err) {
+        console.warn('Lỗi đọc preview base64:', err)
+      }
+
       const fileName = filePath.split(/[\\/]/).pop() || filePath
+      const isVid = isMediaVideo(filePath)
 
       setMonitors(prev =>
         prev.map((m, idx) =>
@@ -1139,12 +1150,15 @@ export default function App() {
                     if (isVideo) {
                       return (
                         <video
-                          src={toAssetUrl(wp)}
+                          src={pUrl || toAssetUrl(wp)}
                           autoPlay
                           loop
                           muted
                           playsInline
                           style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                          onError={(e) => {
+                            console.warn('Video tag error, fallback to asset url', e)
+                          }}
                         />
                       )
                     }
