@@ -681,28 +681,31 @@ export default function App() {
     })
     fetchSystemMetrics().then(m => setSystemMetrics(m))
 
-    // Tự động phát hiện màn hình thực tế và đọc hình nền hiện tại từ Windows / AppConfig
+    // Tự động phát hiện màn hình thực tế và đọc cấu hình / fallback đẹp mắt
     Promise.all([fetchConnectedMonitors(), getAppConfig()]).then(async ([monList, appCfg]) => {
       if (monList && monList.length > 0) {
         const monWithWallpapers = await Promise.all(
           monList.map(async (m, idx) => {
             const saved = appCfg?.desktops?.find(d => d.id === idx + 1)
-            const targetPath = saved?.wallpaper_path || m.current_wallpaper_path || ''
+            const targetPath = saved?.wallpaper_path || ''
             const isVid = isMediaVideo(targetPath)
 
             let pUrl = ''
             if (targetPath && !isVid) {
               pUrl = await readFileBase64(targetPath)
             }
+
+            const fallbackImg = DESKTOPS[idx % DESKTOPS.length].img
             const wallpaperName = targetPath
               ? targetPath.split(/[\\/]/).pop() || targetPath
-              : `System Wallpaper ${idx + 1}`
+              : `Display ${idx + 1} Theme`
 
             return {
               ...m,
               wallpaper: wallpaperName,
               wallpaper_path: targetPath,
               preview_url: pUrl,
+              fallback_img: fallbackImg,
             }
           })
         )
@@ -714,8 +717,6 @@ export default function App() {
   const handleSelectWallpaperFile = async (desktopId: number) => {
     const filePath = await selectLocalWallpaperFile()
     if (filePath) {
-      setRealOsWallpaper(filePath).then(res => console.log('Win32 OS Wallpaper Result:', res))
-
       const fileName = filePath.split(/[\\/]/).pop() || filePath
       const isImg = !isMediaVideo(filePath)
       const previewUrl = isImg ? await readFileBase64(filePath) : ''
@@ -744,9 +745,6 @@ export default function App() {
   const handleSelectMonitorWallpaperFile = async (monitorIndex: number) => {
     const filePath = await selectLocalWallpaperFile()
     if (filePath) {
-      const res = await setMonitorWallpaper(monitorIndex, filePath)
-      console.log(`Set Monitor ${monitorIndex + 1} Wallpaper Result:`, res)
-
       const isVid = isMediaVideo(filePath)
       const previewUrl = !isVid ? await readFileBase64(filePath) : ''
       const fileName = filePath.split(/[\\/]/).pop() || filePath
@@ -1134,8 +1132,9 @@ export default function App() {
                 <div style={{ position: 'relative', aspectRatio: '16/9', background: '#111' }}>
                   {(() => {
                     const wp = (m as any).wallpaper_path || ''
-                    const isVideo = wp.endsWith('.mp4') || wp.endsWith('.webm')
+                    const isVideo = isMediaVideo(wp)
                     const pUrl = (m as any).preview_url
+                    const fallbackImg = (m as any).fallback_img || DESKTOPS[idx % DESKTOPS.length].img
 
                     if (isVideo) {
                       return (
@@ -1150,34 +1149,15 @@ export default function App() {
                       )
                     }
 
-                    if (pUrl || wp) {
-                      return (
-                        <img
-                          src={pUrl || toAssetUrl(wp)}
-                          alt={m.device_name}
-                          style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-                        />
-                      )
-                    }
-
                     return (
-                      <div
-                        style={{
-                          width: '100%',
-                          height: '100%',
-                          display: 'flex',
-                          flexDirection: 'column',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          background: 'linear-gradient(135deg, rgba(30,41,59,0.8), rgba(15,23,42,0.9))',
-                          color: 'rgba(255,255,255,0.5)',
-                          fontSize: 12,
-                          gap: 4,
+                      <img
+                        src={pUrl || (wp ? toAssetUrl(wp) : fallbackImg)}
+                        alt={m.device_name}
+                        style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                        onError={(e) => {
+                          ;(e.currentTarget as HTMLImageElement).src = fallbackImg
                         }}
-                      >
-                        <Monitor size={24} color="#64748b" />
-                        <span>{m.resolution_str}</span>
-                      </div>
+                      />
                     )
                   })()}
                   {m.is_primary && (
