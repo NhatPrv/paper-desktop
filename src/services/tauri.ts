@@ -1,4 +1,4 @@
-import { invoke } from '@tauri-apps/api/core'
+import { invoke, convertFileSrc } from '@tauri-apps/api/core'
 
 export interface WorkerWStatus {
   progman_found: boolean
@@ -11,6 +11,14 @@ export interface RealVirtualDesktop {
   guid: string
   name: string
   is_current: boolean
+}
+
+export interface DisplayMonitorInfo {
+  device_name: string
+  width: number
+  height: number
+  is_primary: boolean
+  resolution_str: string
 }
 
 export interface DesktopSetting {
@@ -67,6 +75,30 @@ export async function fetchRealVirtualDesktops(): Promise<RealVirtualDesktop[]> 
       { id: 2, guid: 'A192B743-9821-4190-C823-912A8401E202', name: 'Desktop 2', is_current: false },
       { id: 3, guid: 'B823C910-1294-4712-D912-3841029F1303', name: 'Work', is_current: false },
     ]
+  }
+}
+
+/** Đọc kích thước độ phân giải thực tế của tất cả màn hình kết nối qua Win32 EnumDisplayMonitors */
+export async function fetchConnectedMonitors(): Promise<DisplayMonitorInfo[]> {
+  try {
+    return await invoke<DisplayMonitorInfo[]>('fetch_connected_monitors')
+  } catch (err) {
+    return [
+      { device_name: '\\\\.\\DISPLAY1', width: 2560, height: 1440, is_primary: true, resolution_str: '2560×1440' },
+    ]
+  }
+}
+
+/** Chuyển đổi đường dẫn file đĩa cục bộ sang dạng URL asset an toàn cho Webview phát video/ảnh */
+export function toAssetUrl(filePath: string): string {
+  if (!filePath) return ''
+  if (filePath.startsWith('http://') || filePath.startsWith('https://') || filePath.startsWith('data:')) {
+    return filePath
+  }
+  try {
+    return convertFileSrc(filePath)
+  } catch (err) {
+    return filePath
   }
 }
 

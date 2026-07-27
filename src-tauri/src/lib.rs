@@ -1,10 +1,12 @@
 pub mod config;
 pub mod monitor;
+pub mod monitor_info;
 pub mod vdesktop;
 pub mod workerw;
 
 use config::{load_config, save_config, AppConfig};
 use monitor::{check_fullscreen_state, FullscreenStatus};
+use monitor_info::{get_connected_monitors, DisplayMonitorInfo};
 use serde::Serialize;
 use vdesktop::{get_real_windows_virtual_desktops, RealVirtualDesktop};
 use workerw::{attach_to_workerw, init_workerw, WorkerWStatus};
@@ -30,6 +32,11 @@ fn attach_wallpaper_window(child_hwnd: usize) -> Result<String, String> {
 #[tauri::command]
 fn fetch_real_virtual_desktops() -> Vec<RealVirtualDesktop> {
     get_real_windows_virtual_desktops()
+}
+
+#[tauri::command]
+fn fetch_connected_monitors() -> Vec<DisplayMonitorInfo> {
+    get_connected_monitors()
 }
 
 #[tauri::command]
@@ -77,6 +84,7 @@ pub fn run() {
             init_workerw_engine,
             attach_wallpaper_window,
             fetch_real_virtual_desktops,
+            fetch_connected_monitors,
             get_app_config_cmd,
             save_app_config_cmd,
             check_fullscreen_status,

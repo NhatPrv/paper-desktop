@@ -3,12 +3,15 @@ import {
   initWorkerW,
   fetchSystemMetrics,
   fetchRealVirtualDesktops,
+  fetchConnectedMonitors,
   selectLocalWallpaperFile,
   getAppConfig,
   saveAppConfig,
+  toAssetUrl,
   WorkerWStatus,
   SystemMetrics,
   RealVirtualDesktop,
+  DisplayMonitorInfo,
   AppConfig,
 } from '@/services/tauri'
 import {
@@ -221,10 +224,13 @@ function DesktopCard({
   isActive,
   onChangeWallpaper,
 }: {
-  desktop: (typeof DESKTOPS)[0]
+  desktop: any
   isActive: boolean
   onChangeWallpaper?: () => void
 }) {
+  const isVideo = desktop.wallpaper_path && (desktop.wallpaper_path.endsWith('.mp4') || desktop.wallpaper_path.endsWith('.webm'))
+  const isCustomImage = desktop.wallpaper_path && (desktop.wallpaper_path.endsWith('.png') || desktop.wallpaper_path.endsWith('.jpg') || desktop.wallpaper_path.endsWith('.jpeg'))
+
   return (
     <div
       className="desktop-card"
@@ -233,11 +239,28 @@ function DesktopCard({
     >
       {/* Thumbnail */}
       <div style={{ position: 'relative', aspectRatio: '16/9', background: '#111' }}>
-        <img
-          src={desktop.img}
-          alt={desktop.wallpaper}
-          style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-        />
+        {isVideo ? (
+          <video
+            src={toAssetUrl(desktop.wallpaper_path)}
+            autoPlay
+            loop
+            muted
+            playsInline
+            style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+          />
+        ) : isCustomImage ? (
+          <img
+            src={toAssetUrl(desktop.wallpaper_path)}
+            alt={desktop.wallpaper}
+            style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+          />
+        ) : (
+          <img
+            src={desktop.img}
+            alt={desktop.wallpaper}
+            style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+          />
+        )}
         {/* Active indicator */}
         {isActive && (
           <div
@@ -635,31 +658,71 @@ export default function App() {
     fullscreen_description: 'Active - Standby',
   })
 
+  const [monitors, setMonitors] = useState<DisplayMonitorInfo[]>([])
+
   useEffect(() => {
     initWorkerW().then(status => {
       setWorkerWStatus(status)
       console.log('WorkerW Engine Status:', status)
     })
     fetchSystemMetrics().then(m => setSystemMetrics(m))
-    fetchRealVirtualDesktops().then(realList => {
-      if (realList && realList.length > 0) {
-        setDesktopsList(realList.map((rd, index) => ({
-          id: rd.id,
-          name: rd.name,
-          wallpaper: 'Aurora Drift',
-          resolution: '2560×1440',
-          active: rd.is_current,
-          img: DESKTOPS[index % DESKTOPS.length].img,
-        })))
+
+    // Tự động phát hiện màn hình thực tế và load cấu hình
+    Promise.all([fetchRealVirtualDesktops(), fetchConnectedMonitors(), getAppConfig()]).then(
+      ([realList, monList, appCfg]) => {
+        if (monList && monList.length > 0) {
+          setMonitors(monList)
+        }
+
+        const primaryRes = monList && monList.length > 0 ? monList[0].resolution_str : '1920×1080'
+
+        if (realList && realList.length > 0) {
+          setDesktopsList(
+            realList.map((rd, index) => {
+              const savedSetting = appCfg?.desktops?.find(d => d.id === rd.id || d.guid === rd.guid)
+              const wallpaperName = savedSetting?.wallpaper_path
+                ? savedSetting.wallpaper_path.split(/[\\/]/).pop() || savedSetting.wallpaper_path
+                : DESKTOPS[index % DESKTOPS.length].wallpaper
+
+              return {
+                id: rd.id,
+                guid: rd.guid,
+                name: rd.name,
+                wallpaper: wallpaperName,
+                wallpaper_path: savedSetting?.wallpaper_path || '',
+                resolution: primaryRes,
+                active: rd.is_current,
+                img: DESKTOPS[index % DESKTOPS.length].img,
+              }
+            })
+          )
+        }
       }
-    })
+    )
   }, [])
 
   const handleSelectWallpaperFile = async (desktopId: number) => {
     const filePath = await selectLocalWallpaperFile()
     if (filePath) {
       const fileName = filePath.split(/[\\/]/).pop() || filePath
-      setDesktopsList(prev => prev.map(d => d.id === desktopId ? { ...d, wallpaper: fileName } : d))
+      setDesktopsList(prev => {
+        const updated = prev.map(d => (d.id === desktopId ? { ...d, wallpaper: fileName, wallpaper_path: filePath } : d))
+
+        getAppConfig().then(cfg => {
+          const newDesktops = updated.map(d => ({
+            id: d.id,
+            guid: (d as any).guid || `desktop-${d.id}`,
+            name: d.name,
+            wallpaper_path: (d as any).wallpaper_path || '',
+            wallpaper_type: (d as any).wallpaper_path?.endsWith('.mp4') || (d as any).wallpaper_path?.endsWith('.webm') ? 'video' : 'image',
+            volume: 0,
+            paused: false,
+          }))
+          saveAppConfig({ ...cfg, desktops: newDesktops })
+        })
+
+        return updated
+      })
     }
   }
 
@@ -911,7 +974,7 @@ export default function App() {
               Virtual Desktops Manager
             </h1>
             <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.35)', margin: '3px 0 0' }}>
-              {DESKTOPS.length} desktops configured · Live wallpapers {wallpaperActive ? 'running' : 'paused'}
+              {desktopsList.length} Virtual Desktops · {monitors.length > 0 ? `Display: ${monitors.map(m => `${m.resolution_str}${m.is_primary ? ' (Primary)' : ''}`).join(', ')}` : 'Detecting hardware...'}
             </p>
           </div>
 
