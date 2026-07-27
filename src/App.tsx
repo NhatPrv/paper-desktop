@@ -668,6 +668,12 @@ export default function App() {
 
   const [monitors, setMonitors] = useState<DisplayMonitorInfo[]>([])
 
+  function isMediaVideo(path: string): boolean {
+    if (!path) return false
+    const p = path.toLowerCase()
+    return p.endsWith('.mp4') || p.endsWith('.webm') || p.endsWith('.mkv') || p.endsWith('.mov') || p.endsWith('.avi') || p.endsWith('.wmv')
+  }
+
   useEffect(() => {
     initWorkerW().then(status => {
       setWorkerWStatus(status)
@@ -675,23 +681,27 @@ export default function App() {
     })
     fetchSystemMetrics().then(m => setSystemMetrics(m))
 
-    // Tự động phát hiện màn hình thực tế và đọc hình nền hiện tại của máy
-    fetchConnectedMonitors().then(async monList => {
+    // Tự động phát hiện màn hình thực tế và đọc hình nền hiện tại từ Windows / AppConfig
+    Promise.all([fetchConnectedMonitors(), getAppConfig()]).then(async ([monList, appCfg]) => {
       if (monList && monList.length > 0) {
         const monWithWallpapers = await Promise.all(
           monList.map(async (m, idx) => {
+            const saved = appCfg?.desktops?.find(d => d.id === idx + 1)
+            const targetPath = saved?.wallpaper_path || m.current_wallpaper_path || ''
+            const isVid = isMediaVideo(targetPath)
+
             let pUrl = ''
-            if (m.current_wallpaper_path && !m.current_wallpaper_path.endsWith('.mp4') && !m.current_wallpaper_path.endsWith('.webm')) {
-              pUrl = await readFileBase64(m.current_wallpaper_path)
+            if (targetPath && !isVid) {
+              pUrl = await readFileBase64(targetPath)
             }
-            const wallpaperName = m.current_wallpaper_path
-              ? m.current_wallpaper_path.split(/[\\/]/).pop() || m.current_wallpaper_path
+            const wallpaperName = targetPath
+              ? targetPath.split(/[\\/]/).pop() || targetPath
               : `System Wallpaper ${idx + 1}`
 
             return {
               ...m,
               wallpaper: wallpaperName,
-              wallpaper_path: m.current_wallpaper_path,
+              wallpaper_path: targetPath,
               preview_url: pUrl,
             }
           })
@@ -704,11 +714,10 @@ export default function App() {
   const handleSelectWallpaperFile = async (desktopId: number) => {
     const filePath = await selectLocalWallpaperFile()
     if (filePath) {
-      // 1. Đổi ngay hình nền thật của Windows OS qua Win32 SystemParametersInfoW API
       setRealOsWallpaper(filePath).then(res => console.log('Win32 OS Wallpaper Result:', res))
 
       const fileName = filePath.split(/[\\/]/).pop() || filePath
-      const isImg = !filePath.endsWith('.mp4') && !filePath.endsWith('.webm')
+      const isImg = !isMediaVideo(filePath)
       const previewUrl = isImg ? await readFileBase64(filePath) : ''
 
       setDesktopsList(prev => {
@@ -738,8 +747,8 @@ export default function App() {
       const res = await setMonitorWallpaper(monitorIndex, filePath)
       console.log(`Set Monitor ${monitorIndex + 1} Wallpaper Result:`, res)
 
-      const isImg = !filePath.endsWith('.mp4') && !filePath.endsWith('.webm')
-      const previewUrl = isImg ? await readFileBase64(filePath) : ''
+      const isVid = isMediaVideo(filePath)
+      const previewUrl = !isVid ? await readFileBase64(filePath) : ''
       const fileName = filePath.split(/[\\/]/).pop() || filePath
 
       setMonitors(prev =>
@@ -749,6 +758,20 @@ export default function App() {
             : m
         )
       )
+
+      getAppConfig().then(cfg => {
+        const currentDesktops = (cfg.desktops || []).filter(d => d.id !== monitorIndex + 1)
+        currentDesktops.push({
+          id: monitorIndex + 1,
+          guid: `monitor-${monitorIndex + 1}`,
+          name: `Display ${monitorIndex + 1}`,
+          wallpaper_path: filePath,
+          wallpaper_type: isVid ? 'video' : 'image',
+          volume: 0,
+          paused: false,
+        })
+        saveAppConfig({ ...cfg, desktops: currentDesktops })
+      })
     }
   }
 
