@@ -8,6 +8,7 @@ use config::{load_config, save_config, AppConfig};
 use monitor::{check_fullscreen_state, FullscreenStatus};
 use monitor_info::{get_connected_monitors, DisplayMonitorInfo};
 use serde::Serialize;
+use std::fs;
 use vdesktop::{get_real_windows_virtual_desktops, RealVirtualDesktop};
 use workerw::{attach_to_workerw, init_workerw, WorkerWStatus};
 
@@ -57,13 +58,34 @@ fn check_fullscreen_status() -> FullscreenStatus {
 #[tauri::command]
 fn select_local_wallpaper_file() -> Result<Option<String>, String> {
     let file = rfd::FileDialog::new()
-        .add_filter("Media Files (*.mp4, *.webm, *.png, *.jpg)", &["mp4", "webm", "png", "jpg", "jpeg"])
+        .add_filter("Media Files (*.mp4, *.webm, *.png, *.jpg, *.jpeg, *.webp)", &["mp4", "webm", "png", "jpg", "jpeg", "webp"])
         .add_filter("Video Files (*.mp4, *.webm)", &["mp4", "webm"])
-        .add_filter("Image Files (*.png, *.jpg)", &["png", "jpg", "jpeg"])
+        .add_filter("Image Files (*.png, *.jpg, *.jpeg, *.webp)", &["png", "jpg", "jpeg", "webp"])
         .set_title("Chọn Live Wallpaper / Hình nền cho Desktop")
         .pick_file();
 
     Ok(file.map(|p| p.to_string_lossy().to_string()))
+}
+
+#[tauri::command]
+fn read_file_base64(file_path: String) -> Result<String, String> {
+    let bytes = fs::read(&file_path).map_err(|e| format!("Không thể đọc tệp {}: {}", file_path, e))?;
+    let ext = file_path.split('.').last().unwrap_or("").to_lowercase();
+    
+    let mime = match ext.as_str() {
+        "png" => "image/png",
+        "jpg" | "jpeg" => "image/jpeg",
+        "webp" => "image/webp",
+        "gif" => "image/gif",
+        "svg" => "image/svg+xml",
+        "mp4" => "video/mp4",
+        "webm" => "video/webm",
+        _ => "application/octet-stream",
+    };
+
+    use base64::Engine;
+    let b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
+    Ok(format!("data:{};base64,{}", mime, b64))
 }
 
 #[tauri::command]
@@ -89,6 +111,7 @@ pub fn run() {
             save_app_config_cmd,
             check_fullscreen_status,
             select_local_wallpaper_file,
+            read_file_base64,
             get_system_metrics
         ])
         .run(tauri::generate_context!())

@@ -8,6 +8,7 @@ import {
   getAppConfig,
   saveAppConfig,
   toAssetUrl,
+  readFileBase64,
   WorkerWStatus,
   SystemMetrics,
   RealVirtualDesktop,
@@ -229,7 +230,12 @@ function DesktopCard({
   onChangeWallpaper?: () => void
 }) {
   const isVideo = desktop.wallpaper_path && (desktop.wallpaper_path.endsWith('.mp4') || desktop.wallpaper_path.endsWith('.webm'))
-  const isCustomImage = desktop.wallpaper_path && (desktop.wallpaper_path.endsWith('.png') || desktop.wallpaper_path.endsWith('.jpg') || desktop.wallpaper_path.endsWith('.jpeg'))
+  const isCustomImage = Boolean(desktop.preview_url) || (desktop.wallpaper_path && (
+    desktop.wallpaper_path.endsWith('.png') ||
+    desktop.wallpaper_path.endsWith('.jpg') ||
+    desktop.wallpaper_path.endsWith('.jpeg') ||
+    desktop.wallpaper_path.endsWith('.webp')
+  ))
 
   return (
     <div
@@ -250,7 +256,7 @@ function DesktopCard({
           />
         ) : isCustomImage ? (
           <img
-            src={toAssetUrl(desktop.wallpaper_path)}
+            src={desktop.preview_url || toAssetUrl(desktop.wallpaper_path)}
             alt={desktop.wallpaper}
             style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
           />
@@ -669,7 +675,7 @@ export default function App() {
 
     // Tự động phát hiện màn hình thực tế và load cấu hình
     Promise.all([fetchRealVirtualDesktops(), fetchConnectedMonitors(), getAppConfig()]).then(
-      ([realList, monList, appCfg]) => {
+      async ([realList, monList, appCfg]) => {
         if (monList && monList.length > 0) {
           setMonitors(monList)
         }
@@ -677,12 +683,17 @@ export default function App() {
         const primaryRes = monList && monList.length > 0 ? monList[0].resolution_str : '1920×1080'
 
         if (realList && realList.length > 0) {
-          setDesktopsList(
-            realList.map((rd, index) => {
+          const listWithBase64 = await Promise.all(
+            realList.map(async (rd, index) => {
               const savedSetting = appCfg?.desktops?.find(d => d.id === rd.id || d.guid === rd.guid)
               const wallpaperName = savedSetting?.wallpaper_path
                 ? savedSetting.wallpaper_path.split(/[\\/]/).pop() || savedSetting.wallpaper_path
                 : DESKTOPS[index % DESKTOPS.length].wallpaper
+
+              let previewUrl = ''
+              if (savedSetting?.wallpaper_path && !savedSetting.wallpaper_path.endsWith('.mp4') && !savedSetting.wallpaper_path.endsWith('.webm')) {
+                previewUrl = await readFileBase64(savedSetting.wallpaper_path)
+              }
 
               return {
                 id: rd.id,
@@ -690,12 +701,14 @@ export default function App() {
                 name: rd.name,
                 wallpaper: wallpaperName,
                 wallpaper_path: savedSetting?.wallpaper_path || '',
+                preview_url: previewUrl,
                 resolution: primaryRes,
                 active: rd.is_current,
                 img: DESKTOPS[index % DESKTOPS.length].img,
               }
             })
           )
+          setDesktopsList(listWithBase64)
         }
       }
     )
@@ -705,8 +718,11 @@ export default function App() {
     const filePath = await selectLocalWallpaperFile()
     if (filePath) {
       const fileName = filePath.split(/[\\/]/).pop() || filePath
+      const isImg = !filePath.endsWith('.mp4') && !filePath.endsWith('.webm')
+      const previewUrl = isImg ? await readFileBase64(filePath) : ''
+
       setDesktopsList(prev => {
-        const updated = prev.map(d => (d.id === desktopId ? { ...d, wallpaper: fileName, wallpaper_path: filePath } : d))
+        const updated = prev.map(d => (d.id === desktopId ? { ...d, wallpaper: fileName, wallpaper_path: filePath, preview_url: previewUrl } : d))
 
         getAppConfig().then(cfg => {
           const newDesktops = updated.map(d => ({
@@ -714,7 +730,7 @@ export default function App() {
             guid: (d as any).guid || `desktop-${d.id}`,
             name: d.name,
             wallpaper_path: (d as any).wallpaper_path || '',
-            wallpaper_type: (d as any).wallpaper_path?.endsWith('.mp4') || (d as any).wallpaper_path?.endsWith('.webm') ? 'video' : 'image',
+            wallpaper_type: isImg ? 'image' : 'video',
             volume: 0,
             paused: false,
           }))

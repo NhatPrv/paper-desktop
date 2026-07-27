@@ -14,6 +14,7 @@ export interface RealVirtualDesktop {
 }
 
 export interface DisplayMonitorInfo {
+  id: number
   device_name: string
   width: number
   height: number
@@ -84,8 +85,20 @@ export async function fetchConnectedMonitors(): Promise<DisplayMonitorInfo[]> {
     return await invoke<DisplayMonitorInfo[]>('fetch_connected_monitors')
   } catch (err) {
     return [
-      { device_name: '\\\\.\\DISPLAY1', width: 2560, height: 1440, is_primary: true, resolution_str: '2560×1440' },
+      { id: 1, device_name: '\\\\.\\DISPLAY1', width: 2560, height: 1600, is_primary: true, resolution_str: '2560×1600' },
+      { id: 2, device_name: '\\\\.\\DISPLAY2', width: 1920, height: 1080, is_primary: false, resolution_str: '1920×1080' },
     ]
+  }
+}
+
+/** Đọc trực tiếp file ảnh local thành Base64 Data URL để hiển thị 100% không bị lỗi broken icon */
+export async function readFileBase64(filePath: string): Promise<string> {
+  if (!filePath) return ''
+  try {
+    return await invoke<string>('read_file_base64', { filePath })
+  } catch (err) {
+    console.error('Lỗi đọc base64 file:', err)
+    return toAssetUrl(filePath)
   }
 }
 

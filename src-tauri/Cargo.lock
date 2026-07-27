@@ -2350,6 +2350,7 @@ dependencies = [
 name = "paper-desktop"
 version = "0.1.0"
 dependencies = [
+ "base64 0.22.1",
  "dirs",
  "rfd 0.15.4",
  "serde",
