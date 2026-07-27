@@ -1,5 +1,9 @@
 #[cfg(target_os = "windows")]
 use std::sync::atomic::{AtomicPtr, Ordering};
+#[cfg(target_os = "windows")]
+use std::sync::Mutex;
+#[cfg(target_os = "windows")]
+use std::collections::HashMap;
 use serde::Serialize;
 
 #[cfg(target_os = "windows")]
@@ -15,7 +19,13 @@ use windows::{
     },
 };
 
+#[cfg(target_os = "windows")]
+use crate::monitor_info::get_current_monitor_wallpaper;
+
 static WORKERW_HWND: AtomicPtr<std::ffi::c_void> = AtomicPtr::new(std::ptr::null_mut());
+
+#[cfg(target_os = "windows")]
+static ORIGINAL_WALLPAPERS: Mutex<Option<HashMap<u32, String>>> = Mutex::new(None);
 
 #[derive(Debug, Serialize, Clone)]
 pub struct WorkerWStatus {
@@ -113,8 +123,42 @@ pub fn init_workerw() -> Result<WorkerWStatus, String> {
     }
 }
 
+/// Sao lưu hình nền mặc định ban đầu của từng màn hình trước khi áp dụng hình nền mới
+pub fn backup_original_wallpaper_if_needed(monitor_index: u32) {
+    #[cfg(target_os = "windows")]
+    {
+        if let Ok(mut guard) = ORIGINAL_WALLPAPERS.lock() {
+            let map = guard.get_or_insert_with(HashMap::new);
+            if !map.contains_key(&monitor_index) {
+                let orig = get_current_monitor_wallpaper(monitor_index);
+                map.insert(monitor_index, orig);
+            }
+        }
+    }
+}
+
+/// Tự động khôi phục (revert) hình nền gốc của máy khi thoát ứng dụng
+pub fn restore_original_wallpapers() -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        if let Ok(guard) = ORIGINAL_WALLPAPERS.lock() {
+            if let Some(map) = guard.as_ref() {
+                for (&idx, orig_path) in map.iter() {
+                    if !orig_path.is_empty() {
+                        let _ = set_wallpaper_for_monitor(idx, orig_path);
+                    }
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
 /// Đổi hình nền ĐỘC LẬP cho từng màn hình vật lý cụ thể (Monitor 1, Monitor 2...) qua Windows COM API IDesktopWallpaper
 pub fn set_wallpaper_for_monitor(monitor_index: u32, image_path: &str) -> Result<String, String> {
+    // 1. Tự động sao lưu hình nền mặc định của màn hình nếu chưa lưu
+    backup_original_wallpaper_if_needed(monitor_index);
+
     // Nếu tệp là Video (.mp4, .webm), không gọi native OS Image wallpaper engine để tránh làm đen màn hình
     let is_video = image_path.ends_with(".mp4") || image_path.ends_with(".webm");
     if is_video {

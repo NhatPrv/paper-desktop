@@ -10,7 +10,7 @@ use monitor_info::{get_connected_monitors, DisplayMonitorInfo};
 use serde::Serialize;
 use std::fs;
 use vdesktop::{get_real_windows_virtual_desktops, RealVirtualDesktop};
-use workerw::{attach_to_workerw, init_workerw, set_wallpaper_for_monitor, WorkerWStatus};
+use workerw::{attach_to_workerw, init_workerw, restore_original_wallpapers, set_wallpaper_for_monitor, WorkerWStatus};
 
 #[derive(Debug, Serialize)]
 pub struct SystemMetrics {
@@ -118,6 +118,12 @@ fn get_system_metrics() -> SystemMetrics {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .on_window_event(|_window, event| {
+            if let tauri::WindowEvent::CloseRequested { .. } = event {
+                // Tự động khôi phục (revert) hình nền gốc mặc định của Windows khi tắt ứng dụng
+                let _ = restore_original_wallpapers();
+            }
+        })
         .invoke_handler(tauri::generate_handler![
             init_workerw_engine,
             attach_wallpaper_window,
