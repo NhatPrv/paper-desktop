@@ -1109,31 +1109,54 @@ export default function App() {
                 }}
               >
                 <div style={{ position: 'relative', aspectRatio: '16/9', background: '#111' }}>
-                  {(m as any).preview_url ? (
-                    <img
-                      src={(m as any).preview_url}
-                      alt={m.device_name}
-                      style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-                    />
-                  ) : (
-                    <div
-                      style={{
-                        width: '100%',
-                        height: '100%',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        background: 'linear-gradient(135deg, rgba(30,41,59,0.8), rgba(15,23,42,0.9))',
-                        color: 'rgba(255,255,255,0.5)',
-                        fontSize: 12,
-                        gap: 4,
-                      }}
-                    >
-                      <Monitor size={24} color="#64748b" />
-                      <span>{m.resolution_str}</span>
-                    </div>
-                  )}
+                  {(() => {
+                    const wp = (m as any).wallpaper_path || ''
+                    const isVideo = wp.endsWith('.mp4') || wp.endsWith('.webm')
+                    const pUrl = (m as any).preview_url
+
+                    if (isVideo) {
+                      return (
+                        <video
+                          src={toAssetUrl(wp)}
+                          autoPlay
+                          loop
+                          muted
+                          playsInline
+                          style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                        />
+                      )
+                    }
+
+                    if (pUrl || wp) {
+                      return (
+                        <img
+                          src={pUrl || toAssetUrl(wp)}
+                          alt={m.device_name}
+                          style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                        />
+                      )
+                    }
+
+                    return (
+                      <div
+                        style={{
+                          width: '100%',
+                          height: '100%',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          background: 'linear-gradient(135deg, rgba(30,41,59,0.8), rgba(15,23,42,0.9))',
+                          color: 'rgba(255,255,255,0.5)',
+                          fontSize: 12,
+                          gap: 4,
+                        }}
+                      >
+                        <Monitor size={24} color="#64748b" />
+                        <span>{m.resolution_str}</span>
+                      </div>
+                    )
+                  })()}
                   {m.is_primary && (
                     <div
                       style={{
