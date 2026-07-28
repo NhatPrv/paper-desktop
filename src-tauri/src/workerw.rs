@@ -137,28 +137,8 @@ pub fn backup_original_wallpaper_if_needed(monitor_index: u32) {
     }
 }
 
-/// Tự động khôi phục (revert) hình nền gốc của máy khi thoát ứng dụng
-pub fn restore_original_wallpapers() -> Result<(), String> {
-    #[cfg(target_os = "windows")]
-    {
-        if let Ok(guard) = ORIGINAL_WALLPAPERS.lock() {
-            if let Some(map) = guard.as_ref() {
-                for (&idx, orig_path) in map.iter() {
-                    if !orig_path.is_empty() {
-                        let _ = set_wallpaper_for_monitor(idx, orig_path);
-                    }
-                }
-            }
-        }
-    }
-    Ok(())
-}
-
-/// Đổi hình nền ĐỘC LẬP cho từng màn hình vật lý cụ thể (Monitor 1, Monitor 2...) qua Windows COM API IDesktopWallpaper
-pub fn set_wallpaper_for_monitor(monitor_index: u32, image_path: &str) -> Result<String, String> {
-    // 1. Tự động sao lưu hình nền mặc định của màn hình nếu chưa lưu
-    backup_original_wallpaper_if_needed(monitor_index);
-
+/// Hàm nội bộ thực thi đổi hình nền cho từng màn hình vật lý
+fn set_wallpaper_internal(monitor_index: u32, image_path: &str) -> Result<String, String> {
     // Nếu tệp là Video (.mp4, .webm), không gọi native OS Image wallpaper engine để tránh làm đen màn hình
     let is_video = image_path.ends_with(".mp4") || image_path.ends_with(".webm");
     if is_video {
@@ -210,6 +190,36 @@ pub fn set_wallpaper_for_monitor(monitor_index: u32, image_path: &str) -> Result
     {
         Ok(format!("Simulation: Đổi hình nền Màn hình {} thành {}", monitor_index + 1, image_path))
     }
+}
+
+/// Tự động khôi phục (revert) hình nền gốc của máy khi thoát ứng dụng hoặc khi chuyển sang Pause
+pub fn restore_original_wallpapers() -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        let mut list_to_restore = Vec::new();
+        if let Ok(guard) = ORIGINAL_WALLPAPERS.lock() {
+            if let Some(map) = guard.as_ref() {
+                for (&idx, orig_path) in map.iter() {
+                    if !orig_path.is_empty() {
+                        list_to_restore.push((idx, orig_path.clone()));
+                    }
+                }
+            }
+        }
+
+        // Thực thi đổi hình nền ngoài phạm vi Mutex Lock để tuyệt đối tránh Mutex Deadlock Crash
+        for (idx, orig_path) in list_to_restore {
+            let _ = set_wallpaper_internal(idx, &orig_path);
+        }
+    }
+    Ok(())
+}
+
+/// Đổi hình nền ĐỘC LẬP cho từng màn hình vật lý cụ thể (Monitor 1, Monitor 2...) qua Windows COM API IDesktopWallpaper
+pub fn set_wallpaper_for_monitor(monitor_index: u32, image_path: &str) -> Result<String, String> {
+    // 1. Tự động sao lưu hình nền mặc định của màn hình nếu chưa lưu
+    backup_original_wallpaper_if_needed(monitor_index);
+    set_wallpaper_internal(monitor_index, image_path)
 }
 
 /// Đưa cửa sổ con (Video Render Window) làm con của WorkerW

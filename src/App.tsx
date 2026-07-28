@@ -690,11 +690,14 @@ export default function App() {
           monList.map(async (m, idx) => {
             const saved = appCfg?.desktops?.find(d => d.id === idx + 1)
             const targetPath = saved?.wallpaper_path || ''
-            const isVid = isMediaVideo(targetPath)
 
             let pUrl = ''
-            if (targetPath && !isVid) {
-              pUrl = await readFileBase64(targetPath)
+            if (targetPath) {
+              try {
+                pUrl = await readFileBase64(targetPath)
+              } catch (err) {
+                console.warn('Lỗi nạp Base64 preview:', err)
+              }
             }
 
             const fallbackImg = DESKTOPS[idx % DESKTOPS.length].img
