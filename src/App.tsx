@@ -1082,30 +1082,6 @@ export default function App() {
               />
             </div>
 
-            {/* Restore Original OS Wallpaper button */}
-            <button
-              onClick={async () => {
-                const res = await restoreWindowsWallpaper()
-                console.log('Restore OS Wallpaper:', res)
-              }}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 6,
-                padding: '7px 12px',
-                borderRadius: 8,
-                border: '1px solid rgba(255,255,255,0.15)',
-                background: 'rgba(255,255,255,0.06)',
-                color: 'rgba(255,255,255,0.85)',
-                fontSize: 12,
-                fontWeight: 600,
-                cursor: 'pointer',
-                fontFamily: 'inherit',
-              }}
-            >
-              <RotateCcw size={13} />
-              Restore Windows OS Wallpaper
-            </button>
             <button
               className="glow-btn"
               style={{

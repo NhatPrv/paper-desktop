@@ -9,6 +9,11 @@ use monitor::{check_fullscreen_state, FullscreenStatus};
 use monitor_info::{get_connected_monitors, DisplayMonitorInfo};
 use serde::Serialize;
 use std::fs;
+use tauri::{
+    menu::{MenuBuilder, MenuItemBuilder},
+    tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
+    Manager, WindowEvent,
+};
 use vdesktop::{get_real_windows_virtual_desktops, RealVirtualDesktop};
 use workerw::{attach_to_workerw, init_workerw, restore_original_wallpapers, set_wallpaper_for_monitor, WorkerWStatus};
 
@@ -124,10 +129,66 @@ fn get_system_metrics() -> SystemMetrics {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
-        .on_window_event(|_window, event| {
-            if let tauri::WindowEvent::CloseRequested { .. } = event {
-                // Tự động khôi phục (revert) hình nền gốc mặc định của Windows khi tắt ứng dụng
-                let _ = restore_original_wallpapers();
+        .setup(|app| {
+            // Xây dựng Menu ngữ cảnh cho System Tray Icon ở khay hệ thống Taskbar
+            let toggle_item = MenuItemBuilder::new("Mở / Ẩn Paper Desktop").id("toggle").build(app)?;
+            let quit_item = MenuItemBuilder::new("Thoát Hoàn Toàn (Khôi phục hình nền)").id("quit").build(app)?;
+
+            let tray_menu = MenuBuilder::new(app)
+                .items(&[&toggle_item, &quit_item])
+                .build()?;
+
+            let _tray = TrayIconBuilder::new()
+                .icon(app.default_window_icon().unwrap().clone())
+                .menu(&tray_menu)
+                .tooltip("Paper Desktop - Live Wallpaper Engine")
+                .on_menu_event(|app_handle, event| match event.id.as_ref() {
+                    "toggle" => {
+                        if let Some(window) = app_handle.get_webview_window("main") {
+                            let is_visible = window.is_visible().unwrap_or(false);
+                            if is_visible {
+                                let _ = window.hide();
+                            } else {
+                                let _ = window.show();
+                                let _ = window.set_focus();
+                            }
+                        }
+                    }
+                    "quit" => {
+                        // Khôi phục ngay hình nền gốc mặc định của Windows trước khi ngắt tiến trình
+                        let _ = restore_original_wallpapers();
+                        app_handle.exit(0);
+                    }
+                    _ => {}
+                })
+                .on_tray_icon_event(|tray, event| {
+                    if let TrayIconEvent::Click {
+                        button: MouseButton::Left,
+                        button_state: MouseButtonState::Up,
+                        ..
+                    } = event
+                    {
+                        let app_handle = tray.app_handle();
+                        if let Some(window) = app_handle.get_webview_window("main") {
+                            let is_visible = window.is_visible().unwrap_or(false);
+                            if is_visible {
+                                let _ = window.hide();
+                            } else {
+                                let _ = window.show();
+                                let _ = window.set_focus();
+                            }
+                        }
+                    }
+                })
+                .build(app)?;
+
+            Ok(())
+        })
+        .on_window_event(|window, event| {
+            if let WindowEvent::CloseRequested { api, .. } = event {
+                // Ngăn chặn diệt app khi nhấn nút [X] -> Tự động ẩn xuống System Tray góc dưới Taskbar
+                api.prevent_close();
+                let _ = window.hide();
             }
         })
         .invoke_handler(tauri::generate_handler![
