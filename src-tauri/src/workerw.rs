@@ -14,9 +14,9 @@ use windows::{
     Win32::UI::Shell::{DesktopWallpaper, IDesktopWallpaper},
     Win32::UI::WindowsAndMessaging::{
         EnumWindows, FindWindowExW, FindWindowW, SendMessageTimeoutW, SetParent,
-        SetWindowLongPtrW, SystemParametersInfoW, GWL_EXSTYLE, GWL_STYLE, SMTO_NORMAL,
-        SPIF_SENDCHANGE, SPIF_UPDATEINIFILE, SPI_SETDESKWALLPAPER, WS_CHILD, WS_EX_NOACTIVATE,
-        WS_EX_TOOLWINDOW, WS_VISIBLE,
+        SetWindowLongPtrW, SetWindowPos, SystemParametersInfoW, GWL_EXSTYLE, GWL_STYLE, HWND_TOP,
+        SMTO_NORMAL, SPIF_SENDCHANGE, SPIF_UPDATEINIFILE, SPI_SETDESKWALLPAPER, SWP_NOACTIVATE,
+        SWP_SHOWWINDOW, WS_CHILD, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_VISIBLE,
     },
 };
 
@@ -186,7 +186,7 @@ fn set_wallpaper_internal(monitor_index: u32, image_path: &str) -> Result<String
 
     #[cfg(not(target_os = "windows"))]
     {
-        Ok(format!("Simulation: Đổi hình nền Màn hình {} thành {}", monitor_index + 1, image_path))
+        Ok(format!("Simulation: Đổi hình nền Màn hình {} thành {}", monitor_index + 1, image_path));
     }
 }
 
@@ -218,8 +218,8 @@ pub fn set_wallpaper_for_monitor(monitor_index: u32, image_path: &str) -> Result
     set_wallpaper_internal(monitor_index, image_path)
 }
 
-/// Đưa cửa sổ con (Video Render Window) làm con của WorkerW
-pub fn attach_to_workerw(child_hwnd_ptr: usize) -> Result<String, String> {
+/// Đưa cửa sổ con (Video Render Window) làm con của WorkerW và định vị chính xác vừa khít màn hình chỉ định
+pub fn attach_to_workerw(child_hwnd_ptr: usize, x: i32, y: i32, width: i32, height: i32) -> Result<String, String> {
     #[cfg(target_os = "windows")]
     unsafe {
         let workerw_ptr = WORKERW_HWND.load(Ordering::Relaxed);
@@ -241,9 +241,20 @@ pub fn attach_to_workerw(child_hwnd_ptr: usize) -> Result<String, String> {
         let old_parent = SetParent(child_hwnd, workerw_hwnd)
             .map_err(|e| format!("SetParent thất bại: {}", e))?;
 
+        // 3. Đặt chính xác vị trí và kích thước cửa sổ vừa khít màn hình chỉ định trên WorkerW
+        let _ = SetWindowPos(
+            child_hwnd,
+            HWND_TOP,
+            x,
+            y,
+            width,
+            height,
+            SWP_NOACTIVATE | SWP_SHOWWINDOW,
+        );
+
         Ok(format!(
-            "Gắn cửa sổ 0x{:X} vào WorkerW 0x{:X} thành công (Parent cũ: 0x{:X})",
-            child_hwnd_ptr, workerw_ptr as usize, old_parent.0 as usize
+            "Gắn cửa sổ 0x{:X} tại ({},{}) {}x{} vào WorkerW 0x{:X} thành công (Parent cũ: 0x{:X})",
+            child_hwnd_ptr, x, y, width, height, workerw_ptr as usize, old_parent.0 as usize
         ))
     }
 

@@ -32,7 +32,7 @@ fn init_workerw_engine() -> Result<WorkerWStatus, String> {
 
 #[tauri::command]
 fn attach_wallpaper_window(child_hwnd: usize) -> Result<String, String> {
-    attach_to_workerw(child_hwnd)
+    attach_to_workerw(child_hwnd, 0, 0, 1920, 1080)
 }
 
 #[tauri::command]
@@ -41,11 +41,10 @@ fn create_video_wallpaper_window(app: tauri::AppHandle, monitor_index: u32, vide
     let monitors = get_connected_monitors();
     let mon = monitors.get(monitor_index as usize).cloned();
 
-    let (x, y, width, height) = if let Some(m) = mon {
-        let pos_x = if monitor_index > 0 { 2560.0 } else { 0.0 };
-        (pos_x, 0.0, m.width as f64, m.height as f64)
+    let (x, y, width, height) = if let Some(ref m) = mon {
+        (m.x, m.y, m.width as i32, m.height as i32)
     } else {
-        (0.0, 0.0, 1920.0, 1080.0)
+        (0, 0, 1920, 1080)
     };
 
     let label = format!("wallpaper_window_{}", monitor_index);
@@ -62,8 +61,8 @@ fn create_video_wallpaper_window(app: tauri::AppHandle, monitor_index: u32, vide
         .decorations(false)
         .transparent(true)
         .resizable(false)
-        .position(x, y)
-        .inner_size(width, height)
+        .position(x as f64, y as f64)
+        .inner_size(width as f64, height as f64)
         .build()
         .map_err(|e| format!("Không thể tạo cửa sổ Video Wallpaper: {}", e))?;
 
@@ -72,7 +71,7 @@ fn create_video_wallpaper_window(app: tauri::AppHandle, monitor_index: u32, vide
     #[cfg(target_os = "windows")]
     if let Ok(hwnd) = window.hwnd() {
         let hwnd_ptr = hwnd.0 as usize;
-        let _ = attach_to_workerw(hwnd_ptr);
+        let _ = attach_to_workerw(hwnd_ptr, x, y, width, height);
     }
 
     Ok(format!("Đã khởi tạo Live Video Wallpaper cho Màn hình {} thành công!", monitor_index + 1))
@@ -95,7 +94,6 @@ fn set_monitor_wallpaper(app: tauri::AppHandle, monitor_index: u32, wallpaper_pa
 
 #[tauri::command]
 fn restore_windows_wallpaper_cmd(app: tauri::AppHandle) -> Result<String, String> {
-    // Đóng các cửa sổ video wallpaper phụ nếu có
     for i in 0..4 {
         let label = format!("wallpaper_window_{}", i);
         if let Some(existing) = app.get_webview_window(&label) {

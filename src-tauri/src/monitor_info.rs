@@ -7,8 +7,8 @@ use windows::Win32::Foundation::{BOOL, LPARAM, RECT};
 #[cfg(target_os = "windows")]
 use windows::Win32::Graphics::Gdi::{
     EnumDisplayDevicesW, EnumDisplayMonitors, EnumDisplaySettingsW, GetMonitorInfoW,
-    DISPLAY_DEVICEW, DISPLAY_DEVICE_ATTACHED_TO_DESKTOP, DISPLAY_DEVICE_PRIMARY_DEVICE,
-    ENUM_CURRENT_SETTINGS, HDC, HMONITOR, MONITORINFOEXW, DEVMODEW,
+    DEVMODEW, DISPLAY_DEVICEW, DISPLAY_DEVICE_ATTACHED_TO_DESKTOP, DISPLAY_DEVICE_PRIMARY_DEVICE,
+    ENUM_CURRENT_SETTINGS, HDC, HMONITOR, MONITORINFOEXW,
 };
 #[cfg(target_os = "windows")]
 use windows::Win32::System::Com::{CoCreateInstance, CoInitializeEx, CLSCTX_ALL, COINIT_APARTMENTTHREADED};
@@ -19,6 +19,8 @@ use windows::Win32::UI::Shell::{DesktopWallpaper, IDesktopWallpaper};
 pub struct DisplayMonitorInfo {
     pub id: u32,
     pub device_name: String,
+    pub x: i32,
+    pub y: i32,
     pub width: u32,
     pub height: u32,
     pub is_primary: bool,
@@ -54,6 +56,8 @@ unsafe extern "system" fn enum_monitors_callback(
     mi.monitorInfo.cbSize = std::mem::size_of::<MONITORINFOEXW>() as u32;
 
     if GetMonitorInfoW(hmonitor, &mut mi as *mut _ as *mut _).as_bool() {
+        let left = mi.monitorInfo.rcMonitor.left;
+        let top = mi.monitorInfo.rcMonitor.top;
         let width = (mi.monitorInfo.rcMonitor.right - mi.monitorInfo.rcMonitor.left).unsigned_abs();
         let height = (mi.monitorInfo.rcMonitor.bottom - mi.monitorInfo.rcMonitor.top).unsigned_abs();
         let is_primary = (mi.monitorInfo.dwFlags & 1) != 0;
@@ -68,6 +72,8 @@ unsafe extern "system" fn enum_monitors_callback(
         list.push(DisplayMonitorInfo {
             id: id + 1,
             device_name,
+            x: left,
+            y: top,
             width,
             height,
             is_primary,
@@ -113,6 +119,8 @@ pub fn get_connected_monitors() -> Vec<DisplayMonitorInfo> {
                 if EnumDisplaySettingsW(PCWSTR(dd.DeviceName.as_ptr()), ENUM_CURRENT_SETTINGS, &mut dm).as_bool() {
                     let w = dm.dmPelsWidth;
                     let h = dm.dmPelsHeight;
+                    let x = dm.Anonymous1.Anonymous2.dmPosition.x;
+                    let y = dm.Anonymous1.Anonymous2.dmPosition.y;
                     let is_primary = (dd.StateFlags & DISPLAY_DEVICE_PRIMARY_DEVICE) != 0;
                     let name = String::from_utf16_lossy(&dd.DeviceName).trim_matches('\0').trim().to_string();
                     let wallpaper_path = get_current_monitor_wallpaper(device_index);
@@ -120,6 +128,8 @@ pub fn get_connected_monitors() -> Vec<DisplayMonitorInfo> {
                     monitors.push(DisplayMonitorInfo {
                         id: device_index + 1,
                         device_name: name,
+                        x,
+                        y,
                         width: w,
                         height: h,
                         is_primary,
@@ -145,6 +155,8 @@ pub fn get_connected_monitors() -> Vec<DisplayMonitorInfo> {
         DisplayMonitorInfo {
             id: 1,
             device_name: "\\\\.\\DISPLAY1".into(),
+            x: 0,
+            y: 0,
             width: 2560,
             height: 1600,
             is_primary: true,
@@ -154,6 +166,8 @@ pub fn get_connected_monitors() -> Vec<DisplayMonitorInfo> {
         DisplayMonitorInfo {
             id: 2,
             device_name: "\\\\.\\DISPLAY2".into(),
+            x: 2560,
+            y: 0,
             width: 1280,
             height: 1024,
             is_primary: false,
