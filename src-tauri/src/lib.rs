@@ -54,7 +54,7 @@ fn create_video_wallpaper_window(app: tauri::AppHandle, monitor_index: u32, vide
     }
 
     let b64_path = base64::engine::general_purpose::URL_SAFE.encode(video_path.as_bytes());
-    let url = format!("index.html?wallpaper_win={}&video_b64={}", monitor_index, b64_path);
+    let url = format!("?wallpaper_win={}&video_b64={}", monitor_index, b64_path);
 
     let window = tauri::WebviewWindowBuilder::new(&app, &label, tauri::WebviewUrl::App(url.into()))
         .title(format!("Paper Desktop Video Engine - Display {}", monitor_index + 1))

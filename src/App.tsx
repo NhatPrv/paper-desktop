@@ -656,40 +656,25 @@ function VideoWallpaperPlayer({ monitorIdx }: { monitorIdx: number }) {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     const videoB64 = params.get('video_b64')
+
     if (videoB64) {
       try {
         const decodedPath = atob(videoB64.replace(/-/g, '+').replace(/_/g, '/'))
         if (decodedPath) {
-          readFileBase64(decodedPath).then(b64 => {
-            if (b64) setVideoSrc(b64)
-          })
+          setVideoSrc(toAssetUrl(decodedPath))
         }
       } catch (e) {
         console.warn('URL base64 decode error:', e)
       }
     }
 
-    getAppConfig()
-      .then(async cfg => {
-        const saved = cfg?.desktops?.find(d => d.id === monitorIdx + 1)
-        const targetPath = saved?.wallpaper_path || ''
-        if (targetPath) {
-          try {
-            const b64 = await readFileBase64(targetPath)
-            if (b64) {
-              setVideoSrc(b64)
-            } else {
-              setVideoSrc(toAssetUrl(targetPath))
-            }
-          } catch (e) {
-            console.error('Lỗi đọc video base64:', e)
-            setVideoSrc(toAssetUrl(targetPath))
-          }
-        }
-      })
-      .catch(err => {
-        console.error('Lỗi tải AppConfig cho Video Player:', err)
-      })
+    getAppConfig().then(cfg => {
+      const saved = cfg?.desktops?.find(d => d.id === monitorIdx + 1)
+      const targetPath = saved?.wallpaper_path || ''
+      if (targetPath) {
+        setVideoSrc(toAssetUrl(targetPath))
+      }
+    })
   }, [monitorIdx])
 
   return (
@@ -700,7 +685,7 @@ function VideoWallpaperPlayer({ monitorIdx }: { monitorIdx: number }) {
         margin: 0,
         padding: 0,
         overflow: 'hidden',
-        background: 'transparent',
+        background: '#000',
         position: 'fixed',
         inset: 0,
       }}
