@@ -46,14 +46,13 @@ unsafe extern "system" fn enum_windows_proc(hwnd: HWND, lparam: LPARAM) -> BOOL 
 
     if let Ok(shell_hwnd) = shell_dll {
         if !shell_hwnd.0.is_null() {
-            let worker_w = FindWindowExW(
+            // Tìm cửa sổ WorkerW kế tiếp nằm ngay bên dưới cửa sổ chứa SHELLDLL_DefView
+            if let Ok(w_hwnd) = FindWindowExW(
                 HWND::default(),
                 hwnd,
                 windows::core::w!("WorkerW"),
                 PCWSTR::null(),
-            );
-
-            if let Ok(w_hwnd) = worker_w {
+            ) {
                 if !w_hwnd.0.is_null() {
                     let target_ptr = lparam.0 as *mut HWND;
                     *target_ptr = w_hwnd;
@@ -80,8 +79,8 @@ pub fn init_workerw() -> Result<WorkerWStatus, String> {
         let _ = SendMessageTimeoutW(
             progman,
             0x052C,
-            WPARAM(0x0D),
-            LPARAM(1),
+            WPARAM(0),
+            LPARAM(0),
             SMTO_NORMAL,
             1000,
             Some(&mut result),
