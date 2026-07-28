@@ -737,6 +737,24 @@ export default function App() {
     }
   }, [])
 
+  const handleToggleActiveState = async (newActive: boolean) => {
+    setWallpaperActive(newActive)
+    setWallpaperPaused(!newActive)
+
+    if (!newActive) {
+      // Tắt (Paused): Khôi phục 100% hình nền gốc mặc định của Windows
+      await restoreWindowsWallpaper()
+    } else {
+      // Bật (Active): Áp dụng TOÀN BỘ hình ảnh và video đã chọn trong app cho tất cả màn hình
+      monitors.forEach(async (m, idx) => {
+        const path = (m as any).wallpaper_path
+        if (path) {
+          await setMonitorWallpaper(idx, path)
+        }
+      })
+    }
+  }
+
   const handleSelectWallpaperFile = async (desktopId: number) => {
     const filePath = await selectLocalWallpaperFile()
     if (filePath) {
@@ -927,7 +945,7 @@ export default function App() {
               <span style={{ fontSize: 12, fontWeight: 600, color: wallpaperActive ? '#60a5fa' : 'rgba(255,255,255,0.45)' }}>
                 Live Wallpaper
               </span>
-              <Toggle checked={wallpaperActive} onChange={() => setWallpaperActive(v => !v)} />
+              <Toggle checked={wallpaperActive} onChange={() => handleToggleActiveState(!wallpaperActive)} />
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
               <span
@@ -997,32 +1015,40 @@ export default function App() {
           </div>
           {/* Fullscreen Auto-Pause status badge */}
           <div
-            style={{
-              padding: '6px 8px',
-              borderRadius: 6,
-              background: systemMetrics.fullscreen_detected
-                ? 'rgba(239,68,68,0.15)'
-                : 'rgba(34,197,94,0.1)',
-              border: `1px solid ${systemMetrics.fullscreen_detected ? 'rgba(239,68,68,0.3)' : 'rgba(34,197,94,0.2)'}`,
-              fontSize: 10,
-              display: 'flex',
-              alignItems: 'center',
-              gap: 5,
-            }}
-          >
-            <span
               style={{
-                width: 5,
-                height: 5,
-                borderRadius: '50%',
-                background: systemMetrics.fullscreen_detected ? '#ef4444' : '#22c55e',
-                display: 'inline-block',
+                padding: '6px 8px',
+                borderRadius: 6,
+                background: systemMetrics.fullscreen_detected
+                  ? 'rgba(239,68,68,0.15)'
+                  : 'rgba(34,197,94,0.1)',
+                border: `1px solid ${systemMetrics.fullscreen_detected ? 'rgba(239,68,68,0.25)' : 'rgba(34,197,94,0.2)'}`,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
               }}
-            />
-            <span style={{ color: systemMetrics.fullscreen_detected ? '#fca5a5' : '#86efac', fontWeight: 500 }}>
-              {systemMetrics.fullscreen_detected ? 'Auto-Pause: Game/Fullscreen' : 'Auto-Pause: Standby (Active)'}
-            </span>
-          </div>
+            >
+              <div
+                style={{
+                  width: 5,
+                  height: 5,
+                  borderRadius: '50%',
+                  background: systemMetrics.fullscreen_detected ? '#ef4444' : '#22c55e',
+                  boxShadow: systemMetrics.fullscreen_detected ? '0 0 6px rgba(239,68,68,0.8)' : '0 0 6px rgba(34,197,94,0.8)',
+                }}
+              />
+              <span
+                style={{
+                  fontSize: 10,
+                  fontWeight: 600,
+                  color: systemMetrics.fullscreen_detected ? '#fca5a5' : '#86efac',
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                }}
+              >
+                {systemMetrics.fullscreen_detected ? 'Auto-Pause: Game/Fullscreen' : 'Auto-Pause: Standby (Active)'}
+              </span>
+            </div>
         </div>
       </aside>
 
@@ -1092,14 +1118,7 @@ export default function App() {
               </span>
               <Toggle
                 checked={!wallpaperPaused}
-                onChange={async () => {
-                  const nextPaused = !wallpaperPaused
-                  setWallpaperPaused(nextPaused)
-                  if (nextPaused) {
-                    // Khi chuyển sang Paused: Tự động khôi phục hình nền gốc của Windows
-                    await restoreWindowsWallpaper()
-                  }
-                }}
+                onChange={() => handleToggleActiveState(wallpaperPaused)}
               />
             </div>
 
