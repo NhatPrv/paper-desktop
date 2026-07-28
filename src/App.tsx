@@ -650,29 +650,32 @@ function FloatingPlayer({
   )
 }
 
-function VideoWallpaperPlayer({ videoPath }: { videoPath: string }) {
+function VideoWallpaperPlayer({ monitorIdx }: { monitorIdx: number }) {
   const [videoSrc, setVideoSrc] = useState<string>('')
 
   useEffect(() => {
-    if (!videoPath) return
-    if (videoPath.startsWith('data:video/')) {
-      setVideoSrc(videoPath)
-      return
-    }
-
-    readFileBase64(videoPath)
-      .then(b64 => {
-        if (b64) {
-          setVideoSrc(b64)
-        } else {
-          setVideoSrc(toAssetUrl(videoPath))
+    getAppConfig()
+      .then(async cfg => {
+        const saved = cfg?.desktops?.find(d => d.id === monitorIdx + 1)
+        const targetPath = saved?.wallpaper_path || ''
+        if (targetPath) {
+          try {
+            const b64 = await readFileBase64(targetPath)
+            if (b64) {
+              setVideoSrc(b64)
+            } else {
+              setVideoSrc(toAssetUrl(targetPath))
+            }
+          } catch (e) {
+            console.error('Lỗi đọc video base64:', e)
+            setVideoSrc(toAssetUrl(targetPath))
+          }
         }
       })
       .catch(err => {
-        console.error('Lỗi đọc video base64:', err)
-        setVideoSrc(toAssetUrl(videoPath))
+        console.error('Lỗi tải AppConfig cho Video Player:', err)
       })
-  }, [videoPath])
+  }, [monitorIdx])
 
   return (
     <div
@@ -711,19 +714,11 @@ function VideoWallpaperPlayer({ videoPath }: { videoPath: string }) {
 export default function App() {
   // Kiểm tra nếu cửa sổ này được mở dạng Standalone Live Video Wallpaper Engine
   const params = new URLSearchParams(window.location.search)
-  const videoB64 = params.get('video_b64')
-  let videoParam = params.get('video')
+  const wallpaperWinParam = params.get('wallpaper_win')
 
-  if (videoB64 && !videoParam) {
-    try {
-      videoParam = atob(videoB64)
-    } catch (e) {
-      console.error('Base64 decode video error:', e)
-    }
-  }
-
-  if (videoParam) {
-    return <VideoWallpaperPlayer videoPath={videoParam} />
+  if (wallpaperWinParam !== null && wallpaperWinParam !== undefined) {
+    const monIdx = parseInt(wallpaperWinParam, 10) || 0
+    return <VideoWallpaperPlayer monitorIdx={monIdx} />
   }
 
   const [activeNav, setActiveNav] = useState('desktops')
