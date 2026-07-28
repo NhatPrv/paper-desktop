@@ -63,18 +63,23 @@ fn create_video_wallpaper_window(app: tauri::AppHandle, monitor_index: u32, vide
         .resizable(false)
         .position(x as f64, y as f64)
         .inner_size(width as f64, height as f64)
-        .build()
-        .map_err(|e| format!("Không thể tạo cửa sổ Video Wallpaper: {}", e))?;
+        .build();
 
-    let _ = init_workerw();
-
-    #[cfg(target_os = "windows")]
-    if let Ok(hwnd) = window.hwnd() {
-        let hwnd_ptr = hwnd.0 as usize;
-        let _ = attach_to_workerw(hwnd_ptr, x, y, width, height);
+    match window {
+        Ok(win) => {
+            let _ = init_workerw();
+            #[cfg(target_os = "windows")]
+            if let Ok(hwnd) = win.hwnd() {
+                let hwnd_ptr = hwnd.0 as usize;
+                let _ = attach_to_workerw(hwnd_ptr, x, y, width, height);
+            }
+            Ok(format!("Đã khởi tạo Live Video Wallpaper cho Màn hình {} thành công!", monitor_index + 1))
+        }
+        Err(e) => {
+            println!("Lỗi khi tạo cửa sổ Video Wallpaper: {:?}", e);
+            Err(format!("Không thể tạo cửa sổ Video Wallpaper: {}", e))
+        }
     }
-
-    Ok(format!("Đã khởi tạo Live Video Wallpaper cho Màn hình {} thành công!", monitor_index + 1))
 }
 
 #[tauri::command]
