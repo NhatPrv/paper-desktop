@@ -1066,12 +1066,19 @@ export default function App() {
                 border: '1px solid rgba(255,255,255,0.08)',
               }}
             >
-              <span style={{ fontSize: 12.5, fontWeight: 500, color: 'rgba(255,255,255,0.5)' }}>
+              <span style={{ fontSize: 12.5, fontWeight: 500, color: wallpaperPaused ? '#f59e0b' : '#10b981' }}>
                 {wallpaperPaused ? 'Paused' : 'Active'}
               </span>
               <Toggle
                 checked={!wallpaperPaused}
-                onChange={() => setWallpaperPaused(v => !v)}
+                onChange={async () => {
+                  const nextPaused = !wallpaperPaused
+                  setWallpaperPaused(nextPaused)
+                  if (nextPaused) {
+                    // Khi chuyển sang Paused: Tự động khôi phục hình nền gốc của Windows
+                    await restoreWindowsWallpaper()
+                  }
+                }}
               />
             </div>
 
