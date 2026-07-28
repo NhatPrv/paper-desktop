@@ -379,16 +379,28 @@ function DesktopCard({
 
 // ─── Wallpaper Card ────────────────────────────────────────────────────────────
 
-function WallpaperCard({ w }: { w: (typeof WALLPAPERS)[0] }) {
+function WallpaperCard({
+  w,
+  onApply,
+}: {
+  w: (typeof WALLPAPERS)[0]
+  onApply: (monIdx: number, path: string) => void
+}) {
+  const [showMenu, setShowMenu] = useState(false)
+
   return (
-    <div className="wallpaper-card" style={{ background: '#0d0d14' }}>
+    <div className="wallpaper-card" style={{ background: '#0d0d14', position: 'relative' }}>
       <img
         src={w.img}
         alt={w.title}
         style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
       />
       {/* Play overlay */}
-      <div className="play-overlay">
+      <div
+        className="play-overlay"
+        onClick={() => setShowMenu(v => !v)}
+        style={{ cursor: 'pointer' }}
+      >
         <div
           style={{
             width: 44,
@@ -404,6 +416,78 @@ function WallpaperCard({ w }: { w: (typeof WALLPAPERS)[0] }) {
           <Play size={18} color="#fff" fill="#fff" />
         </div>
       </div>
+
+      {showMenu && (
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            background: 'rgba(10,10,16,0.94)',
+            backdropFilter: 'blur(8px)',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 8,
+            zIndex: 30,
+            padding: 14,
+          }}
+        >
+          <div style={{ fontSize: 12.5, fontWeight: 700, color: '#fff', textAlign: 'center' }}>{w.title}</div>
+          <div style={{ fontSize: 10.5, color: 'rgba(255,255,255,0.45)', marginBottom: 2 }}>Apply to display:</div>
+          <button
+            onClick={() => {
+              setShowMenu(false)
+              onApply(0, w.img)
+            }}
+            style={{
+              width: '100%',
+              padding: '6px 0',
+              borderRadius: 6,
+              border: '1px solid rgba(56,189,248,0.4)',
+              background: 'rgba(56,189,248,0.15)',
+              color: '#38bdf8',
+              fontSize: 11.5,
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
+          >
+            Apply to Display 1
+          </button>
+          <button
+            onClick={() => {
+              setShowMenu(false)
+              onApply(1, w.img)
+            }}
+            style={{
+              width: '100%',
+              padding: '6px 0',
+              borderRadius: 6,
+              border: '1px solid rgba(168,85,247,0.4)',
+              background: 'rgba(168,85,247,0.15)',
+              color: '#c084fc',
+              fontSize: 11.5,
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
+          >
+            Apply to Display 2
+          </button>
+          <button
+            onClick={() => setShowMenu(false)}
+            style={{
+              marginTop: 2,
+              fontSize: 10.5,
+              color: 'rgba(255,255,255,0.4)',
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+            }}
+          >
+            Cancel
+          </button>
+        </div>
+      )}
 
       {/* Bottom meta */}
       <div
@@ -823,13 +907,56 @@ export default function App() {
       await restoreWindowsWallpaper()
     } else {
       // Bật (Active): Áp dụng TOÀN BỘ hình ảnh và video đã chọn trong app cho tất cả màn hình
+      const appCfg = await getAppConfig()
       monitors.forEach(async (m, idx) => {
-        const path = (m as any).wallpaper_path
+        const saved = appCfg?.desktops?.find(d => d.id === idx + 1)
+        const path = saved?.wallpaper_path || (m as any).wallpaper_path || m.current_wallpaper_path
         if (path) {
           await setMonitorWallpaper(idx, path)
         }
       })
     }
+  }
+
+  const handleApplyLibraryWallpaper = async (monitorIndex: number, filePath: string) => {
+    const isVid = isMediaVideo(filePath)
+
+    // 1. Lưu config trước
+    const cfg = await getAppConfig()
+    const currentDesktops = (cfg.desktops || []).filter(d => d.id !== monitorIndex + 1)
+    currentDesktops.push({
+      id: monitorIndex + 1,
+      guid: `monitor-${monitorIndex + 1}`,
+      name: `Display ${monitorIndex + 1}`,
+      wallpaper_path: filePath,
+      wallpaper_type: isVid ? 'video' : 'image',
+      volume: 0,
+      paused: false,
+    })
+    await saveAppConfig({ ...cfg, desktops: currentDesktops })
+
+    // 2. Thiết lập hình nền
+    await setMonitorWallpaper(monitorIndex, filePath)
+
+    // 3. Cập nhật preview UI card
+    let previewUrl = ''
+    try {
+      if (!isVid) {
+        previewUrl = await readFileBase64(filePath)
+      }
+    } catch (err) {
+      console.warn('Lỗi đọc preview base64:', err)
+    }
+
+    const fileName = filePath.split(/[\\/]/).pop() || filePath
+
+    setMonitors(prev =>
+      prev.map((m, idx) =>
+        idx === monitorIndex
+          ? ({ ...m, wallpaper: fileName, wallpaper_path: filePath, preview_url: previewUrl } as any)
+          : m
+      )
+    )
   }
 
   const handleSelectWallpaperFile = async (desktopId: number) => {
@@ -1450,7 +1577,7 @@ export default function App() {
                 }}
               >
                 {filteredWallpapers.map(w => (
-                  <WallpaperCard key={w.id} w={w} />
+                  <WallpaperCard key={w.id} w={w} onApply={handleApplyLibraryWallpaper} />
                 ))}
               </div>
             ) : (
