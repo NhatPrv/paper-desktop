@@ -54,9 +54,16 @@ fn create_video_wallpaper_window(app: tauri::AppHandle, monitor_index: u32, vide
     }
 
     let b64_path = base64::engine::general_purpose::URL_SAFE.encode(video_path.as_bytes());
-    let url = format!("?wallpaper_win={}&video_b64={}", monitor_index, b64_path);
 
-    let window = tauri::WebviewWindowBuilder::new(&app, &label, tauri::WebviewUrl::App(url.into()))
+    let webview_url = if cfg!(debug_assertions) {
+        let dev_url = format!("http://localhost:3000/?wallpaper_win={}&video_b64={}", monitor_index, b64_path);
+        tauri::WebviewUrl::External(dev_url.parse().map_err(|e| format!("URL error: {}", e))?)
+    } else {
+        let prod_url = format!("index.html?wallpaper_win={}&video_b64={}", monitor_index, b64_path);
+        tauri::WebviewUrl::App(prod_url.into())
+    };
+
+    let window = tauri::WebviewWindowBuilder::new(&app, &label, webview_url)
         .title(format!("Paper Desktop Video Engine - Display {}", monitor_index + 1))
         .decorations(false)
         .transparent(true)
@@ -250,9 +257,11 @@ pub fn run() {
             Ok(())
         })
         .on_window_event(|window, event| {
-            if let WindowEvent::CloseRequested { api, .. } = event {
-                api.prevent_close();
-                let _ = window.hide();
+            if window.label() == "main" {
+                if let WindowEvent::CloseRequested { api, .. } = event {
+                    api.prevent_close();
+                    let _ = window.hide();
+                }
             }
         })
         .invoke_handler(tauri::generate_handler![
