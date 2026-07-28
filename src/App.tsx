@@ -654,6 +654,21 @@ function VideoWallpaperPlayer({ monitorIdx }: { monitorIdx: number }) {
   const [videoSrc, setVideoSrc] = useState<string>('')
 
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const videoB64 = params.get('video_b64')
+    if (videoB64) {
+      try {
+        const decodedPath = atob(videoB64.replace(/-/g, '+').replace(/_/g, '/'))
+        if (decodedPath) {
+          readFileBase64(decodedPath).then(b64 => {
+            if (b64) setVideoSrc(b64)
+          })
+        }
+      } catch (e) {
+        console.warn('URL base64 decode error:', e)
+      }
+    }
+
     getAppConfig()
       .then(async cfg => {
         const saved = cfg?.desktops?.find(d => d.id === monitorIdx + 1)
@@ -863,11 +878,27 @@ export default function App() {
   const handleSelectMonitorWallpaperFile = async (monitorIndex: number) => {
     const filePath = await selectLocalWallpaperFile()
     if (filePath) {
-      // 1. Gọi Win32 COM API IDesktopWallpaper::SetWallpaper để đổi hình nền Màn hình 1 hoặc Màn hình 2
+      const isVid = isMediaVideo(filePath)
+
+      // 1. LƯU CONFIG TRƯỚC VÀ CHỜ LƯU XONG TỰU TRUNG THỰC 100%
+      const cfg = await getAppConfig()
+      const currentDesktops = (cfg.desktops || []).filter(d => d.id !== monitorIndex + 1)
+      currentDesktops.push({
+        id: monitorIndex + 1,
+        guid: `monitor-${monitorIndex + 1}`,
+        name: `Display ${monitorIndex + 1}`,
+        wallpaper_path: filePath,
+        wallpaper_type: isVid ? 'video' : 'image',
+        volume: 0,
+        paused: false,
+      })
+      await saveAppConfig({ ...cfg, desktops: currentDesktops })
+
+      // 2. KÍCH HOẠT CỬA SỔ VIDEO / HÌNH NỀN HỆ THỐNG
       const res = await setMonitorWallpaper(monitorIndex, filePath)
       console.log(`Set Monitor ${monitorIndex + 1} Wallpaper Result:`, res)
 
-      // 2. Mã hóa Data URL qua Rust (Magic Bytes hỗ trợ cả image và video)
+      // 3. Mã hóa preview cho UI Card
       let previewUrl = ''
       try {
         previewUrl = await readFileBase64(filePath)
@@ -876,7 +907,6 @@ export default function App() {
       }
 
       const fileName = filePath.split(/[\\/]/).pop() || filePath
-      const isVid = isMediaVideo(filePath)
 
       setMonitors(prev =>
         prev.map((m, idx) =>
@@ -885,20 +915,6 @@ export default function App() {
             : m
         )
       )
-
-      getAppConfig().then(cfg => {
-        const currentDesktops = (cfg.desktops || []).filter(d => d.id !== monitorIndex + 1)
-        currentDesktops.push({
-          id: monitorIndex + 1,
-          guid: `monitor-${monitorIndex + 1}`,
-          name: `Display ${monitorIndex + 1}`,
-          wallpaper_path: filePath,
-          wallpaper_type: isVid ? 'video' : 'image',
-          volume: 0,
-          paused: false,
-        })
-        saveAppConfig({ ...cfg, desktops: currentDesktops })
-      })
     }
   }
 

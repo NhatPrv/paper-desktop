@@ -36,7 +36,8 @@ fn attach_wallpaper_window(child_hwnd: usize) -> Result<String, String> {
 }
 
 #[tauri::command]
-fn create_video_wallpaper_window(app: tauri::AppHandle, monitor_index: u32, _video_path: String) -> Result<String, String> {
+fn create_video_wallpaper_window(app: tauri::AppHandle, monitor_index: u32, video_path: String) -> Result<String, String> {
+    use base64::Engine;
     let monitors = get_connected_monitors();
     let mon = monitors.get(monitor_index as usize).cloned();
 
@@ -52,7 +53,8 @@ fn create_video_wallpaper_window(app: tauri::AppHandle, monitor_index: u32, _vid
         let _ = existing.close();
     }
 
-    let url = format!("index.html?wallpaper_win={}", monitor_index);
+    let b64_path = base64::engine::general_purpose::URL_SAFE.encode(video_path.as_bytes());
+    let url = format!("index.html?wallpaper_win={}&video_b64={}", monitor_index, b64_path);
 
     let window = tauri::WebviewWindowBuilder::new(&app, &label, tauri::WebviewUrl::App(url.into()))
         .title(format!("Paper Desktop Video Engine - Display {}", monitor_index + 1))
