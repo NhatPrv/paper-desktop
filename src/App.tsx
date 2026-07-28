@@ -653,6 +653,51 @@ function FloatingPlayer({
 // ─── App ───────────────────────────────────────────────────────────────────────
 
 export default function App() {
+  // Kiểm tra nếu cửa sổ này được mở dạng Standalone Live Video Wallpaper Engine
+  const params = new URLSearchParams(window.location.search)
+  const videoB64 = params.get('video_b64')
+  let videoParam = params.get('video')
+
+  if (videoB64 && !videoParam) {
+    try {
+      videoParam = atob(videoB64)
+    } catch (e) {
+      console.error('Base64 decode video error:', e)
+    }
+  }
+
+  if (videoParam) {
+    const videoUrl = toAssetUrl(videoParam)
+    return (
+      <div
+        style={{
+          width: '100vw',
+          height: '100vh',
+          margin: 0,
+          padding: 0,
+          overflow: 'hidden',
+          background: '#000',
+          position: 'fixed',
+          inset: 0,
+        }}
+      >
+        <video
+          src={videoUrl}
+          autoPlay
+          loop
+          muted
+          playsInline
+          style={{
+            width: '100%',
+            height: '100%',
+            objectFit: 'cover',
+            display: 'block',
+          }}
+        />
+      </div>
+    )
+  }
+
   const [activeNav, setActiveNav] = useState('desktops')
   const [wallpaperActive, setWallpaperActive] = useState(true)
   const [wallpaperPaused, setWallpaperPaused] = useState(false)

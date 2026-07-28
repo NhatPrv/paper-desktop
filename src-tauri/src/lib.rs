@@ -36,12 +36,72 @@ fn attach_wallpaper_window(child_hwnd: usize) -> Result<String, String> {
 }
 
 #[tauri::command]
-fn set_monitor_wallpaper(monitor_index: u32, wallpaper_path: String) -> Result<String, String> {
+fn create_video_wallpaper_window(app: tauri::AppHandle, monitor_index: u32, video_path: String) -> Result<String, String> {
+    use base64::Engine;
+    let monitors = get_connected_monitors();
+    let mon = monitors.get(monitor_index as usize).cloned();
+
+    let (x, y, width, height) = if let Some(m) = mon {
+        let pos_x = if monitor_index > 0 { 2560.0 } else { 0.0 };
+        (pos_x, 0.0, m.width as f64, m.height as f64)
+    } else {
+        (0.0, 0.0, 1920.0, 1080.0)
+    };
+
+    let label = format!("wallpaper_window_{}", monitor_index);
+
+    if let Some(existing) = app.get_webview_window(&label) {
+        let _ = existing.close();
+    }
+
+    let b64_path = base64::engine::general_purpose::STANDARD.encode(video_path.as_bytes());
+    let url = format!("index.html?video_b64={}&monitor={}", b64_path, monitor_index);
+
+    let window = tauri::WebviewWindowBuilder::new(&app, &label, tauri::WebviewUrl::App(url.into()))
+        .title(format!("Paper Desktop Video Engine - Display {}", monitor_index + 1))
+        .decorations(false)
+        .transparent(true)
+        .resizable(false)
+        .position(x, y)
+        .inner_size(width, height)
+        .build()
+        .map_err(|e| format!("Không thể tạo cửa sổ Video Wallpaper: {}", e))?;
+
+    let _ = init_workerw();
+
+    #[cfg(target_os = "windows")]
+    if let Ok(hwnd) = window.hwnd() {
+        let hwnd_ptr = hwnd.0 as usize;
+        let _ = attach_to_workerw(hwnd_ptr);
+    }
+
+    Ok(format!("Đã khởi tạo Live Video Wallpaper cho Màn hình {} thành công!", monitor_index + 1))
+}
+
+#[tauri::command]
+fn set_monitor_wallpaper(app: tauri::AppHandle, monitor_index: u32, wallpaper_path: String) -> Result<String, String> {
+    let is_video = wallpaper_path.ends_with(".mp4") || wallpaper_path.ends_with(".webm");
+    if is_video {
+        return create_video_wallpaper_window(app, monitor_index, wallpaper_path);
+    }
+
+    let label = format!("wallpaper_window_{}", monitor_index);
+    if let Some(existing) = app.get_webview_window(&label) {
+        let _ = existing.close();
+    }
+
     set_wallpaper_for_monitor(monitor_index, &wallpaper_path)
 }
 
 #[tauri::command]
-fn restore_windows_wallpaper_cmd() -> Result<String, String> {
+fn restore_windows_wallpaper_cmd(app: tauri::AppHandle) -> Result<String, String> {
+    // Đóng các cửa sổ video wallpaper phụ nếu có
+    for i in 0..4 {
+        let label = format!("wallpaper_window_{}", i);
+        if let Some(existing) = app.get_webview_window(&label) {
+            let _ = existing.close();
+        }
+    }
     restore_original_wallpapers()?;
     Ok("Đã khôi phục thành công hình nền gốc mặc định của Windows".into())
 }
@@ -87,8 +147,6 @@ fn select_local_wallpaper_file() -> Result<Option<String>, String> {
 fn read_file_base64(file_path: String) -> Result<String, String> {
     let bytes = fs::read(&file_path).map_err(|e| format!("Không thể đọc tệp {}: {}", file_path, e))?;
     
-    // Thuật toán Magic Bytes Detection: tự động bóc tách chữ ký byte ảnh/video
-    // Hỗ trợ 100% các file wallpaper cache của Windows 11 không có phần mở rộng (TranscodedWallpaper, AQPP6...)
     let mime = if bytes.len() >= 3 && bytes[0] == 0xFF && bytes[1] == 0xD8 && bytes[2] == 0xFF {
         "image/jpeg"
     } else if bytes.len() >= 4 && bytes[0] == 0x89 && bytes[1] == 0x50 && bytes[2] == 0x4E && bytes[3] == 0x47 {
@@ -106,7 +164,7 @@ fn read_file_base64(file_path: String) -> Result<String, String> {
             "webp" => "image/webp",
             "mp4" => "video/mp4",
             "webm" => "video/webm",
-            _ => "image/jpeg", // Windows Wallpaper Cache luôn là tệp JPEG
+            _ => "image/jpeg",
         }
     };
 
@@ -130,7 +188,6 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
-            // Xây dựng Menu ngữ cảnh cho System Tray Icon ở khay hệ thống Taskbar
             let toggle_item = MenuItemBuilder::new("Mở / Ẩn Paper Desktop").id("toggle").build(app)?;
             let quit_item = MenuItemBuilder::new("Thoát Hoàn Toàn (Khôi phục hình nền)").id("quit").build(app)?;
 
@@ -155,7 +212,12 @@ pub fn run() {
                         }
                     }
                     "quit" => {
-                        // Khôi phục ngay hình nền gốc mặc định của Windows trước khi ngắt tiến trình
+                        for i in 0..4 {
+                            let label = format!("wallpaper_window_{}", i);
+                            if let Some(existing) = app_handle.get_webview_window(&label) {
+                                let _ = existing.close();
+                            }
+                        }
                         let _ = restore_original_wallpapers();
                         app_handle.exit(0);
                     }
@@ -186,7 +248,6 @@ pub fn run() {
         })
         .on_window_event(|window, event| {
             if let WindowEvent::CloseRequested { api, .. } = event {
-                // Ngăn chặn diệt app khi nhấn nút [X] -> Tự động ẩn xuống System Tray góc dưới Taskbar
                 api.prevent_close();
                 let _ = window.hide();
             }
@@ -195,6 +256,7 @@ pub fn run() {
             init_workerw_engine,
             attach_wallpaper_window,
             set_monitor_wallpaper,
+            create_video_wallpaper_window,
             restore_windows_wallpaper_cmd,
             fetch_real_virtual_desktops,
             fetch_connected_monitors,
