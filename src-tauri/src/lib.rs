@@ -68,6 +68,7 @@ fn create_video_wallpaper_window(app: tauri::AppHandle, monitor_index: u32, vide
         .decorations(false)
         .transparent(true)
         .resizable(false)
+        .visible(false)
         .position(x as f64, y as f64)
         .inner_size(width as f64, height as f64)
         .build();
@@ -80,6 +81,7 @@ fn create_video_wallpaper_window(app: tauri::AppHandle, monitor_index: u32, vide
                 let hwnd_ptr = hwnd.0 as usize;
                 let _ = attach_to_workerw(hwnd_ptr, x, y, width, height);
             }
+            let _ = win.show();
             Ok(format!("Đã khởi tạo Live Video Wallpaper cho Màn hình {} thành công!", monitor_index + 1))
         }
         Err(e) => {

@@ -99,8 +99,14 @@ pub fn init_workerw() -> Result<WorkerWStatus, String> {
                 windows::core::w!("WorkerW"),
                 PCWSTR::null(),
             ) {
-                target_workerw = worker_w;
+                if !worker_w.0.is_null() {
+                    target_workerw = worker_w;
+                }
             }
+        }
+
+        if target_workerw.0.is_null() {
+            target_workerw = progman;
         }
 
         WORKERW_HWND.store(target_workerw.0, Ordering::Relaxed);
@@ -185,7 +191,7 @@ fn set_wallpaper_internal(monitor_index: u32, image_path: &str) -> Result<String
 
     #[cfg(not(target_os = "windows"))]
     {
-        Ok(format!("Simulation: Đổi hình nền Màn hình {} thành {}", monitor_index + 1, image_path));
+        Ok(format!("Simulation: Đổi hình nền Màn hình {} thành {}", monitor_index + 1, image_path))
     }
 }
 
@@ -221,9 +227,14 @@ pub fn set_wallpaper_for_monitor(monitor_index: u32, image_path: &str) -> Result
 pub fn attach_to_workerw(child_hwnd_ptr: usize, x: i32, y: i32, width: i32, height: i32) -> Result<String, String> {
     #[cfg(target_os = "windows")]
     unsafe {
-        let workerw_ptr = WORKERW_HWND.load(Ordering::Relaxed);
+        let mut workerw_ptr = WORKERW_HWND.load(Ordering::Relaxed);
         if workerw_ptr.is_null() {
-            return Err("WorkerW HWND chưa được khởi tạo. Hãy gọi init_workerw() trước.".into());
+            let _ = init_workerw();
+            workerw_ptr = WORKERW_HWND.load(Ordering::Relaxed);
+        }
+
+        if workerw_ptr.is_null() {
+            return Err("Không thể lấy HWND của WorkerW/Progman".into());
         }
 
         let workerw_hwnd = HWND(workerw_ptr);
