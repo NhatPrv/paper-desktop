@@ -728,7 +728,8 @@ export default function App() {
     })
     fetchSystemMetrics().then(m => setSystemMetrics(m))
 
-    const refreshMonitorsList = async () => {
+    // 1. Tải và đồng bộ hình nền 1 lần duy nhất khi ứng dụng mở
+    const initStartupMonitors = async () => {
       const [monList, appCfg] = await Promise.all([fetchConnectedMonitors(), getAppConfig()])
       if (monList && monList.length > 0) {
         const monWithWallpapers = await Promise.all(
@@ -740,7 +741,7 @@ export default function App() {
             if (targetPath) {
               try {
                 pUrl = await readFileBase64(targetPath)
-                // Tự động đồng bộ ngay lập tức hình nền lên màn hình thật khi mở app
+                // Thực thi đồng bộ màn hình thật đúng 1 lần khi mở app
                 setMonitorWallpaper(idx, targetPath)
               } catch (err) {
                 console.warn('Lỗi nạp Base64 preview:', err)
@@ -761,29 +762,32 @@ export default function App() {
             }
           })
         )
+        setMonitors(monWithWallpapers)
+      }
+    }
 
+    initStartupMonitors()
+
+    // 2. Vòng lặp polling 2s siêu nhẹ: CHỈ kiểm tra màn hình kết nối mới (0% CPU, KHÔNG gọi COM API)
+    const checkHotPlug = async () => {
+      const monList = await fetchConnectedMonitors()
+      if (monList && monList.length > 0) {
         setMonitors(prev => {
-          const changed =
-            prev.length !== monWithWallpapers.length ||
-            monWithWallpapers.some((m, i) => m.device_name !== prev[i]?.device_name)
-          if (changed) {
-            console.log('Hot-plug monitor detected! Updated displays:', monWithWallpapers)
-            return monWithWallpapers
+          if (prev.length !== monList.length || monList.some((m, i) => m.device_name !== prev[i]?.device_name)) {
+            console.log('Hot-plug monitor detected! Refreshing displays...')
+            initStartupMonitors()
           }
-          return prev.length === 0 ? monWithWallpapers : prev
+          return prev
         })
       }
     }
 
-    refreshMonitorsList()
-
-    // Tự động phát hiện màn hình mới hot-plug qua chu kỳ 2s và window focus
-    const timer = setInterval(refreshMonitorsList, 2000)
-    window.addEventListener('focus', refreshMonitorsList)
+    const timer = setInterval(checkHotPlug, 2000)
+    window.addEventListener('focus', checkHotPlug)
 
     return () => {
       clearInterval(timer)
-      window.removeEventListener('focus', refreshMonitorsList)
+      window.removeEventListener('focus', checkHotPlug)
     }
   }, [])
 
