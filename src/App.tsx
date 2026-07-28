@@ -683,8 +683,8 @@ export default function App() {
     })
     fetchSystemMetrics().then(m => setSystemMetrics(m))
 
-    // Tự động phát hiện màn hình thực tế và đọc cấu hình / fallback đẹp mắt
-    Promise.all([fetchConnectedMonitors(), getAppConfig()]).then(async ([monList, appCfg]) => {
+    const refreshMonitorsList = async () => {
+      const [monList, appCfg] = await Promise.all([fetchConnectedMonitors(), getAppConfig()])
       if (monList && monList.length > 0) {
         const monWithWallpapers = await Promise.all(
           monList.map(async (m, idx) => {
@@ -711,9 +711,30 @@ export default function App() {
             }
           })
         )
-        setMonitors(monWithWallpapers)
+
+        setMonitors(prev => {
+          const changed =
+            prev.length !== monWithWallpapers.length ||
+            monWithWallpapers.some((m, i) => m.device_name !== prev[i]?.device_name)
+          if (changed) {
+            console.log('Hot-plug monitor detected! Updated displays:', monWithWallpapers)
+            return monWithWallpapers
+          }
+          return prev.length === 0 ? monWithWallpapers : prev
+        })
       }
-    })
+    }
+
+    refreshMonitorsList()
+
+    // Tự động phát hiện màn hình mới hot-plug qua chu kỳ 2s và window focus
+    const timer = setInterval(refreshMonitorsList, 2000)
+    window.addEventListener('focus', refreshMonitorsList)
+
+    return () => {
+      clearInterval(timer)
+      window.removeEventListener('focus', refreshMonitorsList)
+    }
   }, [])
 
   const handleSelectWallpaperFile = async (desktopId: number) => {
