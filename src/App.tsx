@@ -740,6 +740,8 @@ export default function App() {
             if (targetPath) {
               try {
                 pUrl = await readFileBase64(targetPath)
+                // Tự động đồng bộ ngay lập tức hình nền lên màn hình thật khi mở app
+                setMonitorWallpaper(idx, targetPath)
               } catch (err) {
                 console.warn('Lỗi nạp Base64 preview:', err)
               }

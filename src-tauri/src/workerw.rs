@@ -14,8 +14,9 @@ use windows::{
     Win32::UI::Shell::{DesktopWallpaper, IDesktopWallpaper},
     Win32::UI::WindowsAndMessaging::{
         EnumWindows, FindWindowExW, FindWindowW, SendMessageTimeoutW, SetParent,
-        SystemParametersInfoW, SMTO_NORMAL, SPIF_SENDCHANGE, SPIF_UPDATEINIFILE,
-        SPI_SETDESKWALLPAPER,
+        SetWindowLongPtrW, SystemParametersInfoW, GWL_EXSTYLE, GWL_STYLE, SMTO_NORMAL,
+        SPIF_SENDCHANGE, SPIF_UPDATEINIFILE, SPI_SETDESKWALLPAPER, WS_CHILD, WS_EX_NOACTIVATE,
+        WS_EX_TOOLWINDOW, WS_VISIBLE,
     },
 };
 
@@ -139,7 +140,6 @@ pub fn backup_original_wallpaper_if_needed(monitor_index: u32) {
 
 /// Hàm nội bộ thực thi đổi hình nền cho từng màn hình vật lý
 fn set_wallpaper_internal(monitor_index: u32, image_path: &str) -> Result<String, String> {
-    // Nếu tệp là Video (.mp4, .webm), không gọi native OS Image wallpaper engine để tránh làm đen màn hình
     let is_video = image_path.ends_with(".mp4") || image_path.ends_with(".webm");
     if is_video {
         let _ = init_workerw();
@@ -156,7 +156,6 @@ fn set_wallpaper_internal(monitor_index: u32, image_path: &str) -> Result<String
             .chain(std::iter::once(0))
             .collect();
 
-        // Khởi tạo IDesktopWallpaper COM Interface
         let desktop_wallpaper: Result<IDesktopWallpaper, _> = CoCreateInstance(&DesktopWallpaper, None, CLSCTX_ALL);
 
         if let Ok(dw) = desktop_wallpaper {
@@ -171,7 +170,6 @@ fn set_wallpaper_internal(monitor_index: u32, image_path: &str) -> Result<String
             }
         }
 
-        // Fallback sang SystemParametersInfoW nếu COM API không khả thi
         let res = SystemParametersInfoW(
             SPI_SETDESKWALLPAPER,
             0,
@@ -207,7 +205,6 @@ pub fn restore_original_wallpapers() -> Result<(), String> {
             }
         }
 
-        // Thực thi đổi hình nền ngoài phạm vi Mutex Lock để tuyệt đối tránh Mutex Deadlock Crash
         for (idx, orig_path) in list_to_restore {
             let _ = set_wallpaper_internal(idx, &orig_path);
         }
@@ -217,7 +214,6 @@ pub fn restore_original_wallpapers() -> Result<(), String> {
 
 /// Đổi hình nền ĐỘC LẬP cho từng màn hình vật lý cụ thể (Monitor 1, Monitor 2...) qua Windows COM API IDesktopWallpaper
 pub fn set_wallpaper_for_monitor(monitor_index: u32, image_path: &str) -> Result<String, String> {
-    // 1. Tự động sao lưu hình nền mặc định của màn hình nếu chưa lưu
     backup_original_wallpaper_if_needed(monitor_index);
     set_wallpaper_internal(monitor_index, image_path)
 }
@@ -234,6 +230,14 @@ pub fn attach_to_workerw(child_hwnd_ptr: usize) -> Result<String, String> {
         let workerw_hwnd = HWND(workerw_ptr);
         let child_hwnd = HWND(child_hwnd_ptr as *mut _);
 
+        // 1. Chuyển kiểu cửa sổ thành WS_CHILD | WS_VISIBLE để loại bỏ hoàn toàn viền cửa sổ và không hiện trên Taskbar
+        let style = (WS_CHILD | WS_VISIBLE).0 as isize;
+        SetWindowLongPtrW(child_hwnd, GWL_STYLE, style);
+
+        let ex_style = (WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE).0 as isize;
+        SetWindowLongPtrW(child_hwnd, GWL_EXSTYLE, ex_style);
+
+        // 2. Nhúng cửa sổ làm con của WorkerW đằng sau icon desktop
         let old_parent = SetParent(child_hwnd, workerw_hwnd)
             .map_err(|e| format!("SetParent thất bại: {}", e))?;
 
