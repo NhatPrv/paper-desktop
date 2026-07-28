@@ -650,6 +650,62 @@ function FloatingPlayer({
   )
 }
 
+function VideoWallpaperPlayer({ videoPath }: { videoPath: string }) {
+  const [videoSrc, setVideoSrc] = useState<string>('')
+
+  useEffect(() => {
+    if (!videoPath) return
+    if (videoPath.startsWith('data:video/')) {
+      setVideoSrc(videoPath)
+      return
+    }
+
+    readFileBase64(videoPath)
+      .then(b64 => {
+        if (b64) {
+          setVideoSrc(b64)
+        } else {
+          setVideoSrc(toAssetUrl(videoPath))
+        }
+      })
+      .catch(err => {
+        console.error('Lỗi đọc video base64:', err)
+        setVideoSrc(toAssetUrl(videoPath))
+      })
+  }, [videoPath])
+
+  return (
+    <div
+      style={{
+        width: '100vw',
+        height: '100vh',
+        margin: 0,
+        padding: 0,
+        overflow: 'hidden',
+        background: 'transparent',
+        position: 'fixed',
+        inset: 0,
+      }}
+    >
+      {videoSrc && (
+        <video
+          src={videoSrc}
+          autoPlay
+          loop
+          muted
+          playsInline
+          style={{
+            width: '100%',
+            height: '100%',
+            objectFit: 'cover',
+            display: 'block',
+          }}
+        />
+      )}
+    </div>
+  )
+}
+
 // ─── App ───────────────────────────────────────────────────────────────────────
 
 export default function App() {
@@ -667,35 +723,7 @@ export default function App() {
   }
 
   if (videoParam) {
-    const videoUrl = toAssetUrl(videoParam)
-    return (
-      <div
-        style={{
-          width: '100vw',
-          height: '100vh',
-          margin: 0,
-          padding: 0,
-          overflow: 'hidden',
-          background: '#000',
-          position: 'fixed',
-          inset: 0,
-        }}
-      >
-        <video
-          src={videoUrl}
-          autoPlay
-          loop
-          muted
-          playsInline
-          style={{
-            width: '100%',
-            height: '100%',
-            objectFit: 'cover',
-            display: 'block',
-          }}
-        />
-      </div>
-    )
+    return <VideoWallpaperPlayer videoPath={videoParam} />
   }
 
   const [activeNav, setActiveNav] = useState('desktops')
