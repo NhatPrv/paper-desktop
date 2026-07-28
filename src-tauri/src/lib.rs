@@ -36,6 +36,12 @@ fn set_monitor_wallpaper(monitor_index: u32, wallpaper_path: String) -> Result<S
 }
 
 #[tauri::command]
+fn restore_windows_wallpaper_cmd() -> Result<String, String> {
+    restore_original_wallpapers()?;
+    Ok("Đã khôi phục thành công hình nền gốc mặc định của Windows".into())
+}
+
+#[tauri::command]
 fn fetch_real_virtual_desktops() -> Vec<RealVirtualDesktop> {
     get_real_windows_virtual_desktops()
 }
@@ -128,6 +134,7 @@ pub fn run() {
             init_workerw_engine,
             attach_wallpaper_window,
             set_monitor_wallpaper,
+            restore_windows_wallpaper_cmd,
             fetch_real_virtual_desktops,
             fetch_connected_monitors,
             get_app_config_cmd,

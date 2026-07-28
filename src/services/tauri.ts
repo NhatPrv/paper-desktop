@@ -77,6 +77,16 @@ export async function setMonitorWallpaper(monitorIndex: number, wallpaperPath: s
   }
 }
 
+/** Khôi phục lại 100% hình nền mặc định ban đầu của hệ điều hành Windows */
+export async function restoreWindowsWallpaper(): Promise<string> {
+  try {
+    return await invoke<string>('restore_windows_wallpaper_cmd')
+  } catch (err) {
+    console.error('Lỗi khi khôi phục hình nền Windows:', err)
+    return String(err)
+  }
+}
+
 /** Đổi hình nền toàn hệ thống */
 export async function setRealOsWallpaper(wallpaperPath: string): Promise<string> {
   return setMonitorWallpaper(0, wallpaperPath)
